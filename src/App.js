@@ -8,7 +8,7 @@ const SUPABASE_ANON_KEY =
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const AGENT_ID = "youssef_friend_v1"; // simple agent ID for now — will become auth later
+const AGENT_ID = "youssef_friend_v1";
 
 const PRODUCTS = [
   { id: "frappe_cafe", name: "Frappé Café", price: 20, unit: "0.9kg" },
@@ -28,18 +28,6 @@ const OUTCOME_COLOR = {
   Revenir: "#60a5fa",
   Refus: "#f87171",
 };
-
-// ─── Visits: still localStorage (fast, offline-friendly for daily logging) ───
-const STORAGE_KEY = "dulcea_visits_v2";
-function loadVisits() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-function saveVisits(visits) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(visits)); } catch {}
-}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmt(n) { return Number(n).toFixed(3); }
@@ -63,8 +51,7 @@ function getDaysUntilReorder(lastOrderDate, cycleDays) {
   const last = new Date(lastOrderDate);
   const nextOrder = new Date(last.getTime() + cycleDays * 24 * 60 * 60 * 1000);
   const today = new Date();
-  const diff = Math.ceil((nextOrder - today) / (1000 * 60 * 60 * 24));
-  return diff;
+  return Math.ceil((nextOrder - today) / (1000 * 60 * 60 * 24));
 }
 
 function getReorderStatus(days) {
@@ -107,17 +94,20 @@ function exportCSV(visits) {
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [tab, setTab] = useState("log");
-  const [visits, setVisits] = useState(() => loadVisits());
+
+  // ── Visits state (Supabase) ──
+  const [visits, setVisits] = useState([]);
+  const [visitsLoading, setVisitsLoading] = useState(false);
   const [form, setForm] = useState({
     business: "", zone: "", contact: CONTACTS[0],
     lines: [emptyLine()], outcome: OUTCOMES[0], note: ""
   });
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   // ── Clients state (Supabase) ──
   const [clients, setClients] = useState([]);
   const [clientsLoading, setClientsLoading] = useState(false);
-  const [clientsError, setClientsError] = useState(null);
   const [showAddClient, setShowAddClient] = useState(false);
   const [clientForm, setClientForm] = useState({
     name: "", type: CLIENT_TYPES[0], phone: "",
@@ -128,10 +118,27 @@ export default function App() {
   const [clientSaving, setClientSaving] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
 
+  // ── Load visits from Supabase ──
+  const loadVisits = useCallback(async () => {
+    setVisitsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("visits")
+        .select("*")
+        .eq("agent_id", AGENT_ID)
+        .order("ts", { ascending: false });
+      if (error) throw error;
+      setVisits(data || []);
+    } catch (e) {
+      console.error("Error loading visits:", e);
+    } finally {
+      setVisitsLoading(false);
+    }
+  }, []);
+
   // ── Load clients from Supabase ──
   const loadClients = useCallback(async () => {
     setClientsLoading(true);
-    setClientsError(null);
     try {
       const { data, error } = await supabase
         .from("clients")
@@ -141,16 +148,13 @@ export default function App() {
       if (error) throw error;
       setClients(data || []);
     } catch (e) {
-      setClientsError("Erreur de chargement. Vérifiez votre connexion.");
+      console.error("Error loading clients:", e);
     } finally {
       setClientsLoading(false);
     }
   }, []);
 
-  useEffect(() => { loadClients(); }, [loadClients]);
-
-  // ── Visits: save to localStorage ──
-  useEffect(() => { saveVisits(visits); }, [visits]);
+  useEffect(() => { loadVisits(); loadClients(); }, [loadVisits, loadClients]);
 
   // ── Visit form handlers ──
   function setF(k, v) { setForm(f => ({ ...f, [k]: v })); }
@@ -161,16 +165,46 @@ export default function App() {
   function removeLine(id) {
     setForm(f => ({ ...f, lines: f.lines.length > 1 ? f.lines.filter(l => l.id !== id) : f.lines }));
   }
-  function logVisit() {
+
+  async function logVisit() {
     if (!form.business.trim()) return;
-    const v = { ...form, id: Date.now(), ts: new Date().toISOString(), hour: new Date().getHours() };
-    setVisits(prev => [v, ...prev]);
-    setForm({ business: "", zone: "", contact: CONTACTS[0], lines: [emptyLine()], outcome: OUTCOMES[0], note: "" });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1800);
+    setSaving(true);
+    const now = new Date();
+    const payload = {
+      id: Date.now(),
+      agent_id: AGENT_ID,
+      ts: now.toISOString(),
+      hour: now.getHours(),
+      business: form.business.trim(),
+      zone: form.zone,
+      contact: form.contact,
+      lines: form.lines.map(l => ({ productId: l.productId, boxes: Number(l.boxes), freePots: Number(l.freePots) })),
+      outcome: form.outcome,
+      note: form.note,
+    };
+    try {
+      const { error } = await supabase.from("visits").insert([payload]);
+      if (error) throw error;
+      await loadVisits();
+      setForm({ business: "", zone: "", contact: CONTACTS[0], lines: [emptyLine()], outcome: OUTCOMES[0], note: "" });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1800);
+    } catch (e) {
+      alert("Erreur lors de l'enregistrement: " + e.message);
+    } finally {
+      setSaving(false);
+    }
   }
-  function convert(id) { setVisits(prev => prev.map(v => v.id === id ? { ...v, outcome: "Vendu" } : v)); }
-  function deleteVisit(id) { setVisits(prev => prev.filter(v => v.id !== id)); }
+
+  async function convertVisit(id) {
+    await supabase.from("visits").update({ outcome: "Vendu" }).eq("id", id);
+    await loadVisits();
+  }
+
+  async function deleteVisit(id) {
+    await supabase.from("visits").delete().eq("id", id);
+    await loadVisits();
+  }
 
   // ── Client form handlers ──
   function setCF(k, v) { setClientForm(f => ({ ...f, [k]: v })); }
@@ -281,9 +315,9 @@ export default function App() {
   const zoneFollowups = {};
   followups.forEach(v => { if (v.zone) zoneFollowups[v.zone] = (zoneFollowups[v.zone] || 0) + 1; });
   const bestZone = Object.entries(zoneFollowups).sort((a, b) => b[1] - a[1])[0];
-  const today = new Date().toDateString();
-  const todayVisits = visits.filter(v => new Date(v.ts).toDateString() === today).length;
-  const todaySales = sold.filter(v => new Date(v.ts).toDateString() === today).length;
+  const todayStr = new Date().toDateString();
+  const todayVisits = visits.filter(v => new Date(v.ts).toDateString() === todayStr).length;
+  const todaySales = sold.filter(v => new Date(v.ts).toDateString() === todayStr).length;
   const formFinancials = calcVisitFinancials(form.lines);
 
   // ── Client stats ──
@@ -299,7 +333,7 @@ export default function App() {
   const tabs = [
     { id: "log", label: "📋 Log" },
     { id: "followup", label: `🔁 (${followups.length})` },
-    { id: "clients", label: `👥 Clients${urgentClients.length > 0 ? ` 🔴` : ""}` },
+    { id: "clients", label: `👥 Clients${urgentClients.length > 0 ? " 🔴" : ""}` },
     { id: "dash", label: "📊 Stats" },
     { id: "nba", label: "🎯 Action" },
   ];
@@ -398,10 +432,13 @@ export default function App() {
               <input style={S.input} placeholder="Optionnel..." value={form.note}
                 onChange={e => setF("note", e.target.value)} />
             </Row>
-            <button style={{ ...S.btn, ...(saved ? S.btnSaved : {}) }} onClick={logVisit}>
-              {saved ? "✓ Enregistré !" : "Enregistrer la visite"}
+            <button style={{ ...S.btn, ...(saved ? S.btnSaved : {}), opacity: saving ? 0.7 : 1 }}
+              onClick={logVisit} disabled={saving}>
+              {saving ? "Enregistrement..." : saved ? "✓ Enregistré !" : "Enregistrer la visite"}
             </button>
-            {visits.length > 0 && (
+
+            {visitsLoading && <div style={S.empty}>Chargement des visites...</div>}
+            {!visitsLoading && visits.length > 0 && (
               <div style={{ marginTop: 20 }}>
                 <div style={S.sectionTitle}>Visites récentes</div>
                 {visits.slice(0, 5).map(v => (
@@ -416,7 +453,8 @@ export default function App() {
         {tab === "followup" && (
           <div>
             <div style={S.sectionTitle}>À relancer ({followups.length})</div>
-            {followups.length === 0 && <div style={S.empty}>Aucune relance en attente 🎉</div>}
+            {visitsLoading && <div style={S.empty}>Chargement...</div>}
+            {!visitsLoading && followups.length === 0 && <div style={S.empty}>Aucune relance en attente 🎉</div>}
             {followups.map(v => (
               <div key={v.id} style={S.card}>
                 <div style={S.cardTop}>
@@ -433,7 +471,7 @@ export default function App() {
                 {v.note && <div style={S.note}>"{v.note}"</div>}
                 <div style={S.cardMeta}>{new Date(v.ts).toLocaleDateString("fr-FR")}</div>
                 <div style={S.cardActions}>
-                  <button style={S.btnSm} onClick={() => convert(v.id)}>✓ Vendu</button>
+                  <button style={S.btnSm} onClick={() => convertVisit(v.id)}>✓ Vendu</button>
                   <button style={{ ...S.btnSm, background: "#333" }} onClick={() => deleteVisit(v.id)}>Supprimer</button>
                 </div>
               </div>
@@ -441,32 +479,27 @@ export default function App() {
           </div>
         )}
 
-        {/* ── CLIENTS TAB (Supabase) ── */}
+        {/* ── CLIENTS TAB ── */}
         {tab === "clients" && (
           <div>
-            {/* Summary bar */}
             <div style={S.grid2}>
               <StatBox label="Clients actifs" value={clients.length} />
               <StatBox label="Commission / cycle" value={`${fmtShort(totalProjectedCommission)} DT`} accent />
             </div>
-
             {urgentClients.length > 0 && (
               <div style={S.urgentBanner}>
                 🔴 {urgentClients.length} client(s) à recontacter cette semaine
               </div>
             )}
-
             <button style={{ ...S.btn, marginBottom: 16 }}
               onClick={() => { setEditingClient(null); setShowAddClient(s => !s); }}>
               {showAddClient ? "✕ Annuler" : "+ Nouveau client"}
             </button>
-
-            {/* Add/Edit client form */}
             {showAddClient && (
               <div style={S.clientFormBox}>
                 <div style={S.sectionTitle}>{editingClient ? "Modifier le client" : "Nouveau client"}</div>
                 <Row label="Nom du client *">
-                  <input style={S.input} placeholder="Café El Amal, Pâtisserie Nour..." value={clientForm.name}
+                  <input style={S.input} placeholder="Café El Amal..." value={clientForm.name}
                     onChange={e => setCF("name", e.target.value)} />
                 </Row>
                 <Row label="Type">
@@ -497,12 +530,10 @@ export default function App() {
                   <input style={S.input} type="number" placeholder="Ex: 250" value={clientForm.last_order_amount}
                     onChange={e => setCF("last_order_amount", e.target.value)} />
                 </Row>
-                <Row label="Cycle de réapprovisionnement (jours)">
+                <Row label="Cycle réapprovisionnement (jours)">
                   <input style={S.input} type="number" value={clientForm.reorder_cycle_days}
                     onChange={e => setCF("reorder_cycle_days", e.target.value)} />
-                  <div style={{ fontSize: 11, color: "#8a7a60", marginTop: 4 }}>
-                    Combien de jours entre chaque commande ? (ex: 35 jours)
-                  </div>
+                  <div style={{ fontSize: 11, color: "#8a7a60", marginTop: 4 }}>Jours entre chaque commande (ex: 35)</div>
                 </Row>
                 <Row label="Taux commission (%)">
                   <input style={S.input} type="number" value={clientForm.commission_rate}
@@ -512,26 +543,21 @@ export default function App() {
                   <input style={S.input} placeholder="Préférences, infos utiles..." value={clientForm.notes}
                     onChange={e => setCF("notes", e.target.value)} />
                 </Row>
-                <button style={{ ...S.btn, ...(clientSaving ? { opacity: 0.6 } : {}) }}
+                <button style={{ ...S.btn, opacity: clientSaving ? 0.6 : 1 }}
                   onClick={saveClient} disabled={clientSaving}>
-                  {clientSaving ? "Enregistrement..." : (editingClient ? "Mettre à jour" : "Ajouter le client")}
+                  {clientSaving ? "Enregistrement..." : editingClient ? "Mettre à jour" : "Ajouter le client"}
                 </button>
               </div>
             )}
-
-            {/* Client list */}
             {clientsLoading && <div style={S.empty}>Chargement des clients...</div>}
-            {clientsError && <div style={{ ...S.empty, color: "#f87171" }}>{clientsError}</div>}
-            {!clientsLoading && !clientsError && clients.length === 0 && !showAddClient && (
+            {!clientsLoading && clients.length === 0 && !showAddClient && (
               <div style={S.empty}>Aucun client encore. Ajoutez votre premier client ci-dessus.</div>
             )}
-
             {clients.map(c => {
               const daysLeft = getDaysUntilReorder(c.last_order_date, c.reorder_cycle_days);
               const status = getReorderStatus(daysLeft);
               const projectedCommission = c.last_order_amount && c.commission_rate
-                ? (c.last_order_amount * c.commission_rate / 100).toFixed(2)
-                : null;
+                ? (c.last_order_amount * c.commission_rate / 100).toFixed(2) : null;
               return (
                 <div key={c.id} style={{ ...S.card, borderLeft: `3px solid ${status.color}` }}>
                   <div style={S.cardTop}>
@@ -540,10 +566,7 @@ export default function App() {
                       {status.label}
                     </span>
                   </div>
-                  <div style={S.cardMeta}>
-                    {c.type && `${c.type} · `}
-                    {c.address && `📍 ${c.address}`}
-                  </div>
+                  <div style={S.cardMeta}>{c.type && `${c.type} · `}{c.address && `📍 ${c.address}`}</div>
                   {c.phone && <div style={S.cardMeta}>📞 {c.phone}</div>}
                   <div style={{ display: "flex", gap: 16, marginTop: 6, marginBottom: 4 }}>
                     {c.last_order_amount && (
@@ -581,33 +604,37 @@ export default function App() {
         {/* ── DASH TAB ── */}
         {tab === "dash" && (
           <div>
-            <div style={S.grid2}>
-              <StatBox label="Visites totales" value={total} />
-              <StatBox label="Ventes" value={sold.length} />
-              <StatBox label="Taux conv." value={`${convRate}%`} accent />
-              <StatBox label="Boxes vendues" value={totalBoxes} />
-            </div>
-            <div style={S.sectionTitle}>Financier</div>
-            <div style={S.finBlock}>
-              <FinRow label="CA brut" value={`${fmt(totalGross)} DT`} />
-              <FinRow label="Investissement (échantillons)" value={`- ${fmt(totalInvestment)} DT`} color="#f87171" />
-              <FinRow label="Revenu net" value={`${fmt(totalNet)} DT`} bold accent />
-            </div>
-            <div style={S.sectionTitle}>Aujourd'hui</div>
-            <div style={S.grid2}>
-              <StatBox label="Visites" value={todayVisits} />
-              <StatBox label="Ventes" value={todaySales} />
-            </div>
-            {bestProdName && <InfoLine icon="🏆" label="Meilleur produit" value={bestProdName} />}
-            {bestContact && <InfoLine icon="🤝" label="Meilleur contact" value={bestContact[0]} />}
-            {bestHour && <InfoLine icon="⏰" label="Meilleure heure" value={bestHour[0]} />}
-            {bestZone && <InfoLine icon="📍" label="Zone + relances" value={`${bestZone[0]} (${bestZone[1]})`} />}
-            {visits.length > 0 && (
-              <button style={{ ...S.btn, marginTop: 20 }} onClick={() => exportCSV(visits)}>
-                ⬇ Exporter en CSV
-              </button>
+            {visitsLoading ? <div style={S.empty}>Chargement...</div> : (
+              <>
+                <div style={S.grid2}>
+                  <StatBox label="Visites totales" value={total} />
+                  <StatBox label="Ventes" value={sold.length} />
+                  <StatBox label="Taux conv." value={`${convRate}%`} accent />
+                  <StatBox label="Boxes vendues" value={fmtShort(totalBoxes)} />
+                </div>
+                <div style={S.sectionTitle}>Financier</div>
+                <div style={S.finBlock}>
+                  <FinRow label="CA brut" value={`${fmt(totalGross)} DT`} />
+                  <FinRow label="Investissement (échantillons)" value={`- ${fmt(totalInvestment)} DT`} color="#f87171" />
+                  <FinRow label="Revenu net" value={`${fmt(totalNet)} DT`} bold accent />
+                </div>
+                <div style={S.sectionTitle}>Aujourd'hui</div>
+                <div style={S.grid2}>
+                  <StatBox label="Visites" value={todayVisits} />
+                  <StatBox label="Ventes" value={todaySales} />
+                </div>
+                {bestProdName && <InfoLine icon="🏆" label="Meilleur produit" value={bestProdName} />}
+                {bestContact && <InfoLine icon="🤝" label="Meilleur contact" value={bestContact[0]} />}
+                {bestHour && <InfoLine icon="⏰" label="Meilleure heure" value={bestHour[0]} />}
+                {bestZone && <InfoLine icon="📍" label="Zone + relances" value={`${bestZone[0]} (${bestZone[1]})`} />}
+                {visits.length > 0 && (
+                  <button style={{ ...S.btn, marginTop: 20 }} onClick={() => exportCSV(visits)}>
+                    ⬇ Exporter en CSV
+                  </button>
+                )}
+                {total === 0 && <div style={S.empty}>Enregistrez vos premières visites pour voir les stats.</div>}
+              </>
             )}
-            {total === 0 && <div style={S.empty}>Enregistrez vos premières visites pour voir les stats.</div>}
           </div>
         )}
 
@@ -642,15 +669,14 @@ export default function App() {
             )}
             {convRate < 30 && total >= 5 && (
               <NBACard icon="💡" title="Conseil conversion"
-                text={`Taux à ${convRate}%. Proposez un pot d'essai gratuit pour lever les freins — votre investissement sera rentabilisé à la prochaine visite.`} />
+                text={`Taux à ${convRate}%. Proposez un pot d'essai gratuit pour lever les freins.`} />
             )}
             {convRate >= 50 && total >= 5 && (
               <NBACard icon="🚀" title="Vous êtes en forme !"
-                text={`${convRate}% de conversion — excellent ! Augmentez votre volume de visites quotidiennes pour maximiser le CA net.`} />
+                text={`${convRate}% de conversion — excellent ! Augmentez votre volume de visites quotidiennes.`} />
             )}
           </div>
         )}
-
       </div>
     </div>
   );
