@@ -1,766 +1,912 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// ─── Supabase ────────────────────────────────────────────────────────────────
 const SUPABASE_URL = "https://fztfqkwphcqtowlpqauy.supabase.co";
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ6dGZxa3dwaGNxdG93bHBxYXV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4OTk2ODMsImV4cCI6MjA5NjQ3NTY4M30.6Ik8_iZovHznLbR5VDSdpdsR4TE2To3i2w4ljv1Ax5w";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ6dGZxa3dwaGNxdG93bHBxYXV5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4OTk2ODMsImV4cCI6MjA5NjQ3NTY4M30.6Ik8_iZovHznLbR5VDSdpdsR4TE2To3i2w4ljv1Ax5w";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ─── Constants ───────────────────────────────────────────────────────────────
-const PRODUCTS = [
-  { id: "frappe_cafe", name: "Frappé Café", price: 20, unit: "0.9kg" },
-  { id: "frappe_neutre", name: "Frappé Neutre", price: 15, unit: "0.9kg" },
-  { id: "icetea", name: "Ice Tea", price: 19, unit: "1L" },
-  { id: "chicoree", name: "Chicorée Café", price: 9.96, unit: "300g" },
-  { id: "choco", name: "Chocolat Chaud", price: 11.9, unit: "1kg" },
-];
+// ─── Design Tokens ────────────────────────────────────────────────────────────
+const T = {
+  bg:        "#0a1628",
+  surface:   "#0f2347",
+  surfaceHi: "#162d5a",
+  border:    "#1a3a6b",
+  accent:    "#2e7dd4",
+  accentHi:  "#5298e8",
+  gold:      "#f0c040",
+  goldDim:   "#b8922a",
+  text:      "#e8f4ff",
+  textSub:   "#7eb8f7",
+  textDim:   "#3a5a8a",
+  success:   "#34d399",
+  warning:   "#fbbf24",
+  danger:    "#f87171",
+  info:      "#60a5fa",
+};
 
+// ─── Google Fonts injection ───────────────────────────────────────────────────
+const fontLink = document.createElement("link");
+fontLink.rel = "stylesheet";
+fontLink.href = "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap";
+document.head.appendChild(fontLink);
+
+const globalStyle = document.createElement("style");
+globalStyle.textContent = `
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: ${T.bg}; }
+  input, select, textarea, button { font-family: 'Inter', sans-serif; }
+  input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: ${T.bg}; }
+  ::-webkit-scrollbar-thumb { background: ${T.border}; border-radius: 4px; }
+  @keyframes wave {
+    0%,100% { transform: scaleX(0.6) translateX(-10px); opacity:0.4; }
+    50% { transform: scaleX(1) translateX(0); opacity:1; }
+  }
+  @keyframes fadeUp {
+    from { opacity:0; transform:translateY(12px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  .eb-card { animation: fadeUp 0.2s ease forwards; }
+  .eb-btn:active { transform: scale(0.97); }
+`;
+document.head.appendChild(globalStyle);
+
+// ─── Constants ────────────────────────────────────────────────────────────────
 const OUTCOMES = ["Vendu", "Intéressé", "Revenir", "Refus"];
 const CONTACTS = ["Propriétaire", "Manager", "Employé"];
 const CLIENT_TYPES = ["Café", "Restaurant", "Hôtel", "Grossiste", "Autre"];
+const OUTCOME_COLOR = { Vendu: T.success, Intéressé: T.warning, Revenir: T.info, Refus: T.danger };
+const OUTCOME_ICON  = { Vendu: "✓", Intéressé: "◎", Revenir: "↺", Refus: "✕" };
 
-const OUTCOME_COLOR = {
-  Vendu: "#4ade80",
-  Intéressé: "#facc15",
-  Revenir: "#60a5fa",
-  Refus: "#f87171",
-};
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const fmt      = n => Number(n).toFixed(3);
+const fmtS     = n => Number(n).toFixed(2);
+const emptyLine = ps => ({ id: Date.now()+Math.random(), productId: ps[0]?.id||"", boxes:1, freePots:0 });
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-function fmt(n) { return Number(n).toFixed(3); }
-function fmtShort(n) { return Number(n).toFixed(2); }
-function emptyLine() {
-  return { id: Date.now() + Math.random(), productId: PRODUCTS[0].id, boxes: 1, freePots: 0 };
-}
-function calcVisitFinancials(lines) {
-  let gross = 0, investment = 0;
-  (lines || []).forEach(l => {
-    const p = PRODUCTS.find(p => p.id === l.productId);
+function calcFin(lines, products) {
+  let gross=0, inv=0;
+  (lines||[]).forEach(l => {
+    const p = products.find(p=>p.id===l.productId);
     if (!p) return;
-    gross += p.price * 12 * Number(l.boxes || 0);
-    investment += p.price * Number(l.freePots || 0);
+    gross += p.price*12*Number(l.boxes||0);
+    inv   += p.price*Number(l.freePots||0);
   });
-  return { gross, investment, net: gross - investment };
+  return { gross, inv, net: gross-inv };
 }
-function getDaysUntilReorder(lastOrderDate, cycleDays) {
-  if (!lastOrderDate) return null;
-  const last = new Date(lastOrderDate);
-  const nextOrder = new Date(last.getTime() + cycleDays * 24 * 60 * 60 * 1000);
-  return Math.ceil((nextOrder - new Date()) / (1000 * 60 * 60 * 24));
+
+function daysUntil(date, cycle) {
+  if (!date) return null;
+  const next = new Date(new Date(date).getTime() + cycle*86400000);
+  return Math.ceil((next - new Date())/86400000);
 }
-function getReorderStatus(days) {
-  if (days === null) return { label: "Pas encore commandé", color: "#8a7a60" };
-  if (days < 0) return { label: `En retard de ${Math.abs(days)}j`, color: "#f87171" };
-  if (days <= 5) return { label: `Rappeler dans ${days}j`, color: "#facc15" };
-  if (days <= 14) return { label: `Dans ${days}j`, color: "#60a5fa" };
-  return { label: `Dans ${days}j`, color: "#4ade80" };
+
+function reorderStatus(days) {
+  if (days===null) return { label:"Pas de commande", color:T.textDim };
+  if (days<0)  return { label:`Retard ${Math.abs(days)}j`, color:T.danger };
+  if (days<=5) return { label:`Rappeler dans ${days}j`,    color:T.warning };
+  if (days<=14)return { label:`Dans ${days}j`,             color:T.info };
+  return            { label:`Dans ${days}j`,               color:T.success };
 }
-function exportCSV(visits) {
-  const rows = [["Date","Heure","Café","Zone","Contact","Produits","Boxes","Pots offerts","Brut (DT)","Investissement (DT)","Net (DT)","Résultat","Note"]];
-  visits.forEach(v => {
-    const fin = calcVisitFinancials(v.lines);
-    const prodNames = (v.lines||[]).map(l=>PRODUCTS.find(p=>p.id===l.productId)?.name||"").join(" | ");
-    const totalBoxes = (v.lines||[]).reduce((s,l)=>s+Number(l.boxes||0),0);
-    const totalFree = (v.lines||[]).reduce((s,l)=>s+Number(l.freePots||0),0);
-    const d = new Date(v.ts);
-    rows.push([d.toLocaleDateString("fr-FR"),`${d.getHours()}h${String(d.getMinutes()).padStart(2,"0")}`,v.business,v.zone||"",v.contact,prodNames,totalBoxes,totalFree,fmt(fin.gross),fmt(fin.investment),fmt(fin.net),v.outcome,v.note||""]);
+
+function exportCSV(visits, products) {
+  const rows=[["Date","Heure","Point de vente","Zone","Contact","Produits","Boxes","Pots offerts","Brut DT","Invest. DT","Net DT","Résultat","Note"]];
+  visits.forEach(v=>{
+    const f=calcFin(v.lines,products);
+    const d=new Date(v.ts);
+    rows.push([d.toLocaleDateString("fr-FR"),`${d.getHours()}h${String(d.getMinutes()).padStart(2,"0")}`,v.business,v.zone||"",v.contact,(v.lines||[]).map(l=>products.find(p=>p.id===l.productId)?.name||"").join("|"),(v.lines||[]).reduce((s,l)=>s+Number(l.boxes||0),0),(v.lines||[]).reduce((s,l)=>s+Number(l.freePots||0),0),fmt(f.gross),fmt(f.inv),fmt(f.net),v.outcome,v.note||""]);
   });
-  const csv = rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
-  const blob = new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href=url; a.download=`dulcea_ventes_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const url=URL.createObjectURL(new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"}));
+  const a=document.createElement("a"); a.href=url; a.download=`eastblue_${new Date().toISOString().slice(0,10)}.csv`; a.click();
   URL.revokeObjectURL(url);
+}
+
+// ─── Design Components ────────────────────────────────────────────────────────
+
+function EBLogo({ size="md", subtitle="" }) {
+  const sz = size==="lg" ? 42 : size==="sm" ? 18 : 26;
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+      <div style={{ position:"relative" }}>
+        <div style={{ fontFamily:"'Bebas Neue', sans-serif", fontSize:sz, color:T.text, letterSpacing:3, lineHeight:1 }}>
+          EAST BLUE
+        </div>
+        <div style={{ position:"absolute", bottom:-3, left:0, right:0, height:2, background:`linear-gradient(90deg, ${T.accent}, ${T.gold})`, borderRadius:2, animation:"wave 3s ease-in-out infinite", transformOrigin:"left" }} />
+      </div>
+      {subtitle && <div style={{ fontSize:10, color:T.textSub, fontWeight:600, letterSpacing:1.5, textTransform:"uppercase", marginLeft:4 }}>{subtitle}</div>}
+    </div>
+  );
+}
+
+function Card({ children, accent, style={} }) {
+  return (
+    <div className="eb-card" style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:14, padding:"14px 16px", marginBottom:10, borderLeft: accent ? `3px solid ${accent}` : undefined, ...style }}>
+      {children}
+    </div>
+  );
+}
+
+function Btn({ children, onClick, disabled, variant="primary", size="md", style={} }) {
+  const base = { display:"flex", alignItems:"center", justifyContent:"center", gap:6, border:"none", borderRadius:10, cursor:disabled?"not-allowed":"pointer", fontFamily:"'Inter',sans-serif", fontWeight:600, transition:"all 0.15s", opacity:disabled?0.6:1, ...style };
+  const variants = {
+    primary:  { background:T.accent,    color:"#fff",     fontSize:size==="sm"?12:14, padding:size==="sm"?"7px 14px":"13px 20px" },
+    gold:     { background:T.gold,      color:"#0a1628",  fontSize:size==="sm"?12:14, padding:size==="sm"?"7px 14px":"13px 20px" },
+    ghost:    { background:"transparent", color:T.textSub, border:`1px solid ${T.border}`, fontSize:size==="sm"?12:14, padding:size==="sm"?"6px 13px":"12px 19px" },
+    danger:   { background:"#1f0a0a",   color:T.danger,   border:`1px solid ${T.danger}`, fontSize:size==="sm"?12:14, padding:size==="sm"?"6px 13px":"12px 19px" },
+    success:  { background:"#0a1f14",   color:T.success,  border:`1px solid ${T.success}`, fontSize:size==="sm"?12:14, padding:size==="sm"?"6px 13px":"12px 19px" },
+  };
+  return <button className="eb-btn" style={{ ...base, ...variants[variant] }} onClick={onClick} disabled={disabled}>{children}</button>;
+}
+
+function Input({ label, value, onChange, placeholder, type="text", hint }) {
+  return (
+    <div style={{ marginBottom:14 }}>
+      {label && <div style={{ fontSize:11, color:T.textSub, fontWeight:600, textTransform:"uppercase", letterSpacing:1, marginBottom:5 }}>{label}</div>}
+      <input style={{ width:"100%", background:T.surfaceHi, border:`1px solid ${T.border}`, borderRadius:9, padding:"11px 13px", color:T.text, fontSize:14, outline:"none", transition:"border 0.15s" }}
+        type={type} value={value} placeholder={placeholder} onChange={e=>onChange(e.target.value)}
+        onFocus={e=>e.target.style.borderColor=T.accent}
+        onBlur={e=>e.target.style.borderColor=T.border} />
+      {hint && <div style={{ fontSize:11, color:T.textDim, marginTop:4 }}>{hint}</div>}
+    </div>
+  );
+}
+
+function Pills({ options, value, onChange, multi=false, colorMap={} }) {
+  function toggle(v) {
+    if (multi) {
+      const arr = Array.isArray(value)?value:[];
+      onChange(arr.includes(v)?arr.filter(x=>x!==v):[...arr,v]);
+    } else { onChange(v); }
+  }
+  const active = v => multi ? (Array.isArray(value)&&value.includes(v)) : value===v;
+  return (
+    <div style={{ display:"flex", flexWrap:"wrap", gap:7 }}>
+      {options.map(v=>{
+        const col = colorMap[v];
+        return (
+          <button key={v} className="eb-btn" onClick={()=>toggle(v)} style={{
+            padding:"7px 14px", borderRadius:20, border:`1.5px solid ${active(v)?(col||T.accent):(T.border)}`,
+            background: active(v) ? (col||T.accent)+"22" : "transparent",
+            color: active(v) ? (col||T.accent) : T.textSub,
+            fontSize:12, fontWeight:600, cursor:"pointer", transition:"all 0.15s"
+          }}>{v}</button>
+        );
+      })}
+    </div>
+  );
+}
+
+function StatGrid({ stats }) {
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:10, marginBottom:16 }}>
+      {stats.map(s=>(
+        <div key={s.label} style={{ background:s.accent?T.surfaceHi:T.surface, border:`1px solid ${s.accent?T.accent:T.border}`, borderRadius:12, padding:"14px 12px", textAlign:"center" }}>
+          <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:28, color:s.accent?T.accent:T.text, letterSpacing:1 }}>{s.value}</div>
+          <div style={{ fontSize:11, color:T.textSub, marginTop:2, fontWeight:500 }}>{s.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SectionTitle({ children }) {
+  return <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:16, color:T.gold, letterSpacing:2, marginBottom:12, marginTop:20, borderBottom:`1px solid ${T.border}`, paddingBottom:6 }}>{children}</div>;
+}
+
+function Badge({ children, color }) {
+  return <span style={{ fontSize:11, padding:"3px 9px", borderRadius:20, background:color+"22", color, fontWeight:700, border:`1px solid ${color}44` }}>{children}</span>;
+}
+
+function FinBlock({ gross, inv, net }) {
+  return (
+    <div style={{ background:T.surfaceHi, border:`1px solid ${T.border}`, borderRadius:10, padding:"10px 14px", marginBottom:14 }}>
+      {[["Brut",`${fmt(gross)} DT`,T.textSub],["Investissement",`- ${fmt(inv)} DT`,T.danger],["Net",`${fmt(net)} DT`,T.gold]].map(([l,v,c])=>(
+        <div key={l} style={{ display:"flex", justifyContent:"space-between", padding:"6px 0", borderBottom:`1px solid ${T.border}`, fontSize:13 }}>
+          <span style={{ color:T.textDim }}>{l}</span>
+          <span style={{ color:c, fontWeight:l==="Net"?700:400 }}>{v}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EmptyState({ icon, title, sub }) {
+  return (
+    <div style={{ textAlign:"center", padding:"40px 20px" }}>
+      <div style={{ fontSize:36, marginBottom:12 }}>{icon}</div>
+      <div style={{ fontSize:15, fontWeight:600, color:T.text, marginBottom:6 }}>{title}</div>
+      {sub && <div style={{ fontSize:13, color:T.textSub }}>{sub}</div>}
+    </div>
+  );
+}
+
+function NBACard({ icon, title, text }) {
+  return (
+    <Card style={{ display:"flex", gap:14, alignItems:"flex-start" }}>
+      <div style={{ fontSize:26, minWidth:36, marginTop:2 }}>{icon}</div>
+      <div>
+        <div style={{ fontSize:14, fontWeight:700, color:T.text, marginBottom:4 }}>{title}</div>
+        <div style={{ fontSize:13, color:T.textSub, lineHeight:1.6 }}>{text}</div>
+      </div>
+    </Card>
+  );
 }
 
 // ─── Auth Screen ──────────────────────────────────────────────────────────────
 function AuthScreen({ onAuth }) {
-  const [mode, setMode] = useState("login"); // login | signup
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [mode, setMode]       = useState("login");
+  const [email, setEmail]     = useState("");
+  const [pass, setPass]       = useState("");
+  const [name, setName]       = useState("");
+  const [phone, setPhone]     = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
+  const [error, setError]     = useState(null);
+  const [ok, setOk]           = useState(null);
 
-  async function handleSubmit() {
-    setError(null);
-    setSuccess(null);
-    if (!email || !password) { setError("Email et mot de passe requis."); return; }
+  async function submit() {
+    setError(null); setOk(null);
+    if (!email||!pass) { setError("Email et mot de passe requis."); return; }
     setLoading(true);
     try {
-      if (mode === "login") {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (mode==="login") {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password:pass });
         if (error) throw error;
         onAuth(data.user);
       } else {
         if (!name.trim()) { setError("Nom requis."); setLoading(false); return; }
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({ email, password:pass });
         if (error) throw error;
-        // Create agent profile
-        await supabase.from("agents").insert([{
-          id: data.user.id,
-          full_name: name.trim(),
-          phone: phone,
-        }]);
-        setSuccess("Compte créé ! Vous pouvez maintenant vous connecter.");
+        await supabase.from("agents").insert([{ id:data.user.id, full_name:name.trim(), phone, role:"agent", status:"pending" }]);
+        setOk("Compte créé. En attente d'activation par votre responsable.");
         setMode("login");
       }
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch(e) { setError(e.message); }
+    finally { setLoading(false); }
   }
 
   return (
-    <div style={{ ...S.app, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100vh", padding: "32px 24px" }}>
-      <div style={{ textAlign: "center", marginBottom: 40 }}>
-        <div style={{ fontSize: 36, fontWeight: 700, color: "#e8d5b0", letterSpacing: 2 }}>Dulcéa</div>
-        <div style={{ fontSize: 13, color: "#8a7a60", marginTop: 6 }}>Sales Network</div>
+    <div style={{ background:T.bg, minHeight:"100vh", maxWidth:480, margin:"0 auto", display:"flex", flexDirection:"column", justifyContent:"center", padding:"32px 24px" }}>
+      {/* Hero */}
+      <div style={{ textAlign:"center", marginBottom:48 }}>
+        <EBLogo size="lg" />
+        <div style={{ marginTop:16, fontSize:13, color:T.textSub, letterSpacing:1 }}>SALES NETWORK</div>
+        <div style={{ marginTop:8, fontSize:12, color:T.textDim }}>Construisez votre équipe. Conquérez votre territoire.</div>
       </div>
 
-      <div style={S.authBox}>
-        <div style={S.authTabs}>
-          <button style={{ ...S.authTab, ...(mode === "login" ? S.authTabActive : {}) }}
-            onClick={() => { setMode("login"); setError(null); setSuccess(null); }}>
-            Connexion
-          </button>
-          <button style={{ ...S.authTab, ...(mode === "signup" ? S.authTabActive : {}) }}
-            onClick={() => { setMode("signup"); setError(null); setSuccess(null); }}>
-            Créer un compte
-          </button>
+      {/* Card */}
+      <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:18, padding:"28px 24px" }}>
+        {/* Mode tabs */}
+        <div style={{ display:"flex", background:T.surfaceHi, borderRadius:10, padding:3, marginBottom:24 }}>
+          {["login","signup"].map(m=>(
+            <button key={m} onClick={()=>{setMode(m);setError(null);setOk(null);}} style={{
+              flex:1, padding:"9px", border:"none", borderRadius:8, cursor:"pointer", fontSize:13, fontWeight:600, transition:"all 0.2s",
+              background: mode===m ? T.accent : "transparent",
+              color: mode===m ? "#fff" : T.textSub,
+            }}>{m==="login"?"Connexion":"Créer un compte"}</button>
+          ))}
         </div>
 
-        <div style={{ padding: "20px 0 0" }}>
-          {mode === "signup" && (
-            <>
-              <AuthField label="Nom complet" value={name} onChange={setName} placeholder="Votre nom" />
-              <AuthField label="Téléphone" value={phone} onChange={setPhone} placeholder="+216 XX XXX XXX" />
-            </>
-          )}
-          <AuthField label="Email" value={email} onChange={setEmail} placeholder="vous@email.com" type="email" />
-          <AuthField label="Mot de passe" value={password} onChange={setPassword} placeholder="••••••••" type="password" />
+        {mode==="signup" && <>
+          <Input label="Nom complet" value={name} onChange={setName} placeholder="Votre nom" />
+          <Input label="Téléphone" value={phone} onChange={setPhone} placeholder="+216 XX XXX XXX" />
+        </>}
+        <Input label="Email" value={email} onChange={setEmail} placeholder="vous@email.com" type="email" />
+        <Input label="Mot de passe" value={pass} onChange={setPass} placeholder="••••••••" type="password" />
 
-          {error && <div style={S.authError}>{error}</div>}
-          {success && <div style={S.authSuccess}>{success}</div>}
+        {error && <div style={{ background:"#1f0a0a", border:`1px solid ${T.danger}44`, borderRadius:8, padding:"10px 13px", fontSize:13, color:T.danger, marginBottom:12 }}>{error}</div>}
+        {ok    && <div style={{ background:"#0a1f14", border:`1px solid ${T.success}44`, borderRadius:8, padding:"10px 13px", fontSize:13, color:T.success, marginBottom:12 }}>{ok}</div>}
 
-          <button style={{ ...S.btn, marginTop: 8, opacity: loading ? 0.7 : 1 }}
-            onClick={handleSubmit} disabled={loading}>
-            {loading ? "..." : mode === "login" ? "Se connecter" : "Créer mon compte"}
-          </button>
-        </div>
+        <Btn style={{ width:"100%", marginTop:4 }} onClick={submit} disabled={loading}>
+          {loading ? "..." : mode==="login" ? "Se connecter →" : "Créer mon compte →"}
+        </Btn>
       </div>
 
-      <div style={{ textAlign: "center", marginTop: 24, fontSize: 11, color: "#8a7a60" }}>
-        Dulcéa Sales Network · Tunis
-      </div>
+      <div style={{ textAlign:"center", marginTop:24, fontSize:11, color:T.textDim }}>East Blue Sales Network · Tunis, Méditerranée</div>
     </div>
   );
 }
 
-function AuthField({ label, value, onChange, placeholder, type = "text" }) {
+// ─── Pending ──────────────────────────────────────────────────────────────────
+function PendingScreen({ status, onSignOut }) {
   return (
-    <div style={{ marginBottom: 14 }}>
-      <div style={S.label}>{label}</div>
-      <input style={S.input} type={type} value={value} placeholder={placeholder}
-        onChange={e => onChange(e.target.value)}
-        onKeyDown={e => e.key === "Enter" && document.activeElement.blur()} />
+    <div style={{ background:T.bg, minHeight:"100vh", maxWidth:480, margin:"0 auto", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:32, textAlign:"center" }}>
+      <div style={{ fontSize:48, marginBottom:20 }}>{status==="rejected"?"⛔":"⚓"}</div>
+      <EBLogo size="md" />
+      <div style={{ marginTop:24, fontSize:18, fontWeight:700, color:T.text }}>{status==="rejected"?"Compte refusé":"En attente d'activation"}</div>
+      <div style={{ marginTop:12, fontSize:13, color:T.textSub, lineHeight:1.8, maxWidth:280 }}>
+        {status==="rejected"
+          ? "Votre demande a été refusée. Contactez votre responsable pour plus d'informations."
+          : "Votre compte est en cours d'examen. Votre responsable vous activera bientôt."}
+      </div>
+      <Btn variant="ghost" style={{ marginTop:32 }} onClick={onSignOut}>Se déconnecter</Btn>
     </div>
   );
 }
 
-// ─── Main App ─────────────────────────────────────────────────────────────────
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [tab, setTab] = useState("log");
+// ─── Bottom Tab Bar ───────────────────────────────────────────────────────────
+function BottomBar({ tabs, active, onChange }) {
+  return (
+    <div style={{ position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)", width:"100%", maxWidth:480, background:T.surface, borderTop:`1px solid ${T.border}`, display:"flex", zIndex:100, paddingBottom:"env(safe-area-inset-bottom, 0px)" }}>
+      {tabs.map(t=>{
+        const isActive = active===t.id;
+        return (
+          <button key={t.id} onClick={()=>onChange(t.id)} style={{ flex:1, padding:"10px 4px 8px", background:"none", border:"none", cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:3, position:"relative" }}>
+            {t.badge>0 && <div style={{ position:"absolute", top:6, right:"50%", transform:"translateX(12px)", background:T.danger, color:"#fff", fontSize:9, fontWeight:700, borderRadius:10, padding:"1px 5px", minWidth:16, textAlign:"center" }}>{t.badge}</div>}
+            <div style={{ fontSize:20 }}>{t.icon}</div>
+            <div style={{ fontSize:9, fontWeight:isActive?700:500, color:isActive?T.accent:T.textDim, letterSpacing:0.5, textTransform:"uppercase" }}>{t.label}</div>
+            {isActive && <div style={{ position:"absolute", top:0, left:"20%", right:"20%", height:2, background:T.accent, borderRadius:"0 0 2px 2px" }} />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
-  // ── Auth state ──
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user || null);
-      setAuthLoading(false);
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
-    });
-    return () => listener.subscription.unsubscribe();
+// ─── KAM App ──────────────────────────────────────────────────────────────────
+function KAMApp({ user, onSignOut }) {
+  const [tab, setTab]             = useState("agents");
+  const [agents, setAgents]       = useState([]);
+  const [products, setProducts]   = useState([]);
+  const [allVisits, setAllVisits] = useState([]);
+  const [allClients, setAllClients] = useState([]);
+  const [agentProducts, setAgentProducts] = useState([]);
+  const [loading, setLoading]     = useState(false);
+  const [showProdForm, setShowProdForm] = useState(false);
+  const [prodForm, setProdForm]   = useState({ name:"", price:"", unit:"" });
+  const [editProd, setEditProd]   = useState(null);
+
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    const [ag,pr,vi,cl,ap] = await Promise.all([
+      supabase.from("agents").select("*").order("created_at",{ascending:false}),
+      supabase.from("products").select("*").eq("active",true).order("name"),
+      supabase.from("visits").select("*").order("ts",{ascending:false}),
+      supabase.from("clients").select("*").order("created_at",{ascending:false}),
+      supabase.from("agent_products").select("*"),
+    ]);
+    setAgents(ag.data||[]); setProducts(pr.data||[]); setAllVisits(vi.data||[]);
+    setAllClients(cl.data||[]); setAgentProducts(ap.data||[]);
+    setLoading(false);
   }, []);
 
-  async function handleSignOut() {
-    await supabase.auth.signOut();
-    setUser(null);
+  useEffect(()=>{ loadAll(); },[loadAll]);
+
+  async function approve(id) { await supabase.from("agents").update({status:"active"}).eq("id",id); loadAll(); }
+  async function reject(id)  { await supabase.from("agents").update({status:"rejected"}).eq("id",id); loadAll(); }
+  async function removeAgent(id) { if (!window.confirm("Supprimer ?")) return; await supabase.from("agents").delete().eq("id",id); loadAll(); }
+
+  async function saveProd() {
+    if (!prodForm.name||!prodForm.price) return;
+    const p = { name:prodForm.name.trim(), price:Number(prodForm.price), unit:prodForm.unit, active:true };
+    if (editProd) await supabase.from("products").update(p).eq("id",editProd.id);
+    else await supabase.from("products").insert([p]);
+    setProdForm({name:"",price:"",unit:""}); setEditProd(null); setShowProdForm(false); loadAll();
   }
 
-  // ── Visits state ──
-  const [visits, setVisits] = useState([]);
-  const [visitsLoading, setVisitsLoading] = useState(false);
-  const [form, setForm] = useState({
-    business: "", zone: "", contact: CONTACTS[0],
-    lines: [emptyLine()], outcome: OUTCOMES[0], note: ""
-  });
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  async function toggleProd(agentId, productId) {
+    const ex = agentProducts.find(ap=>ap.agent_id===agentId&&ap.product_id===productId);
+    if (ex) await supabase.from("agent_products").delete().eq("id",ex.id);
+    else await supabase.from("agent_products").insert([{agent_id:agentId,product_id:productId,commission_rate:8}]);
+    loadAll();
+  }
 
-  // ── Clients state ──
+  function agentStats(id) {
+    const v=allVisits.filter(v=>v.agent_id===id), s=v.filter(v=>v.outcome==="Vendu");
+    let gmv=0; s.forEach(v=>{gmv+=calcFin(v.lines,products).gross;});
+    return { visits:v.length, sold:s.length, clients:allClients.filter(c=>c.agent_id===id).length, gmv, conv:v.length?Math.round(s.length/v.length*100):0 };
+  }
+
+  const pending = agents.filter(a=>a.status==="pending");
+  const active  = agents.filter(a=>a.status==="active"&&a.role==="agent");
+
+  const kamTabs = [
+    { id:"agents",   icon:"👥", label:"Équipe",   badge:pending.length },
+    { id:"products", icon:"📦", label:"Produits",  badge:0 },
+    { id:"overview", icon:"📊", label:"Overview",  badge:0 },
+  ];
+
+  return (
+    <div style={{ background:T.bg, minHeight:"100vh", maxWidth:480, margin:"0 auto", fontFamily:"'Inter',sans-serif", color:T.text, paddingBottom:80 }}>
+      {/* Header */}
+      <div style={{ background:`linear-gradient(135deg, ${T.surface}, ${T.bg})`, padding:"18px 20px 14px", borderBottom:`1px solid ${T.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <EBLogo subtitle="KAM" />
+        <Btn variant="ghost" size="sm" onClick={onSignOut}>Déconnexion</Btn>
+      </div>
+
+      <div style={{ padding:"16px 16px 0" }}>
+        {loading && <EmptyState icon="⚓" title="Chargement..." sub="Récupération des données" />}
+
+        {/* AGENTS */}
+        {tab==="agents" && !loading && <>
+          {pending.length>0 && <>
+            <SectionTitle>Demandes en attente · {pending.length}</SectionTitle>
+            {pending.map(a=>(
+              <Card key={a.id} accent={T.warning}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
+                  <div>
+                    <div style={{ fontWeight:700, fontSize:15 }}>{a.full_name}</div>
+                    {a.phone && <div style={{ fontSize:12, color:T.textSub, marginTop:2 }}>📞 {a.phone}</div>}
+                    <div style={{ fontSize:11, color:T.textDim, marginTop:2 }}>Inscrit le {new Date(a.created_at).toLocaleDateString("fr-FR")}</div>
+                  </div>
+                  <Badge color={T.warning}>En attente</Badge>
+                </div>
+                <div style={{ display:"flex", gap:8 }}>
+                  <Btn size="sm" variant="success" onClick={()=>approve(a.id)}>✓ Approuver</Btn>
+                  <Btn size="sm" variant="danger"  onClick={()=>reject(a.id)}>✕ Rejeter</Btn>
+                </div>
+              </Card>
+            ))}
+          </>}
+
+          <SectionTitle>Agents actifs · {active.length}</SectionTitle>
+          {active.length===0 && <EmptyState icon="🌊" title="Aucun agent actif" sub="Approuvez des demandes pour constituer votre équipe" />}
+          {active.map(a=>{
+            const st=agentStats(a.id);
+            const assigned=agentProducts.filter(ap=>ap.agent_id===a.id);
+            return (
+              <Card key={a.id} accent={T.success}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
+                  <div>
+                    <div style={{ fontWeight:700, fontSize:15 }}>{a.full_name}</div>
+                    {a.phone && <div style={{ fontSize:12, color:T.textSub, marginTop:2 }}>📞 {a.phone}</div>}
+                  </div>
+                  <Badge color={T.success}>Actif</Badge>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6, marginBottom:12 }}>
+                  {[["Visites",st.visits],["Ventes",st.sold],[`${st.conv}%`,"Conv."],[`${fmtS(st.gmv)}`,"DT GMV"]].map(([v,l])=>(
+                    <div key={l} style={{ background:T.surfaceHi, borderRadius:8, padding:"8px 6px", textAlign:"center" }}>
+                      <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:18, color:T.text }}>{v}</div>
+                      <div style={{ fontSize:10, color:T.textDim }}>{l}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ fontSize:11, color:T.textSub, fontWeight:600, textTransform:"uppercase", letterSpacing:1, marginBottom:7 }}>Produits assignés</div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
+                  {products.map(p=>{
+                    const on=assigned.some(ap=>ap.product_id===p.id);
+                    return <button key={p.id} className="eb-btn" onClick={()=>toggleProd(a.id,p.id)} style={{ padding:"5px 12px", borderRadius:20, border:`1.5px solid ${on?T.accent:T.border}`, background:on?T.accent+"22":"transparent", color:on?T.accent:T.textDim, fontSize:11, fontWeight:600, cursor:"pointer", transition:"all 0.15s" }}>{p.name}</button>;
+                  })}
+                </div>
+                <Btn size="sm" variant="danger" onClick={()=>removeAgent(a.id)}>Supprimer l'agent</Btn>
+              </Card>
+            );
+          })}
+        </>}
+
+        {/* PRODUCTS */}
+        {tab==="products" && !loading && <>
+          <Btn style={{ width:"100%", marginBottom:16, marginTop:8 }} onClick={()=>{setEditProd(null);setProdForm({name:"",price:"",unit:""});setShowProdForm(s=>!s);}}>
+            {showProdForm?"✕ Annuler":"+ Nouveau produit"}
+          </Btn>
+          {showProdForm && (
+            <Card>
+              <SectionTitle>{editProd?"Modifier le produit":"Nouveau produit"}</SectionTitle>
+              <Input label="Nom *" value={prodForm.name} onChange={v=>setProdForm(f=>({...f,name:v}))} placeholder="Ex: Frappé Café" />
+              <Input label="Prix unitaire (DT)" value={prodForm.price} onChange={v=>setProdForm(f=>({...f,price:v}))} placeholder="20" type="number" />
+              <Input label="Unité" value={prodForm.unit} onChange={v=>setProdForm(f=>({...f,unit:v}))} placeholder="0.9kg, 1L..." />
+              <Btn style={{ width:"100%" }} onClick={saveProd}>{editProd?"Mettre à jour":"Ajouter le produit"}</Btn>
+            </Card>
+          )}
+          <SectionTitle>Catalogue · {products.length} produits</SectionTitle>
+          {products.length===0 && <EmptyState icon="📦" title="Aucun produit" sub="Ajoutez vos premiers produits au catalogue" />}
+          {products.map(p=>(
+            <Card key={p.id}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                <div style={{ fontWeight:700, fontSize:15 }}>{p.name}</div>
+                <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:20, color:T.gold }}>{p.price} DT</div>
+              </div>
+              {p.unit && <div style={{ fontSize:12, color:T.textSub, marginBottom:6 }}>Unité: {p.unit}</div>}
+              <div style={{ fontSize:12, color:T.textDim, marginBottom:10 }}>Assigné à {agentProducts.filter(ap=>ap.product_id===p.id).length} agent(s)</div>
+              <div style={{ display:"flex", gap:8 }}>
+                <Btn size="sm" variant="ghost" onClick={()=>{setEditProd(p);setProdForm({name:p.name,price:p.price,unit:p.unit||""});setShowProdForm(true);}}>✎ Modifier</Btn>
+                <Btn size="sm" variant="danger" onClick={async()=>{if(!window.confirm("Archiver ?"))return;await supabase.from("products").update({active:false}).eq("id",p.id);loadAll();}}>Archiver</Btn>
+              </div>
+            </Card>
+          ))}
+        </>}
+
+        {/* OVERVIEW */}
+        {tab==="overview" && !loading && <>
+          <SectionTitle>Vue globale</SectionTitle>
+          {(()=>{
+            const sold=allVisits.filter(v=>v.outcome==="Vendu");
+            let gmv=0; sold.forEach(v=>{gmv+=calcFin(v.lines,products).gross;});
+            return <StatGrid stats={[{label:"Agents actifs",value:active.length},{label:"Visites totales",value:allVisits.length},{label:"Ventes totales",value:sold.length,accent:true},{label:"GMV total DT",value:fmtS(gmv),accent:true}]} />;
+          })()}
+          <SectionTitle>Performance par agent</SectionTitle>
+          {active.length===0 && <EmptyState icon="🌊" title="Aucun agent actif" />}
+          {active.map(a=>{
+            const st=agentStats(a.id);
+            return (
+              <Card key={a.id}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                  <div style={{ fontWeight:700 }}>{a.full_name}</div>
+                  <Badge color={st.conv>=50?T.success:st.conv>=30?T.warning:T.danger}>{st.conv}% conv.</Badge>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6 }}>
+                  {[["Visites",st.visits],["Ventes",st.sold],["Clients",st.clients],[`${fmtS(st.gmv)} DT`,"GMV"]].map(([v,l])=>(
+                    <div key={l} style={{ background:T.surfaceHi, borderRadius:8, padding:"8px 6px", textAlign:"center" }}>
+                      <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:16, color:T.text }}>{v}</div>
+                      <div style={{ fontSize:10, color:T.textDim }}>{l}</div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            );
+          })}
+        </>}
+      </div>
+
+      <BottomBar tabs={kamTabs} active={tab} onChange={setTab} />
+    </div>
+  );
+}
+
+// ─── Agent App ────────────────────────────────────────────────────────────────
+function AgentApp({ user, agent, onSignOut }) {
+  const [tab, setTab]         = useState("log");
+  const [products, setProducts] = useState([]);
+  const [visits, setVisits]   = useState([]);
   const [clients, setClients] = useState([]);
-  const [clientsLoading, setClientsLoading] = useState(false);
-  const [showAddClient, setShowAddClient] = useState(false);
-  const [clientForm, setClientForm] = useState({
-    name: "", type: CLIENT_TYPES[0], phone: "",
-    address: "", first_order_date: "", last_order_date: "",
-    last_order_amount: "", reorder_cycle_days: 35, commission_rate: 8, notes: ""
-  });
-  const [clientSaving, setClientSaving] = useState(false);
-  const [editingClient, setEditingClient] = useState(null);
+  const [vLoading, setVLoad]  = useState(false);
+  const [cLoading, setCLoad]  = useState(false);
+  const [form, setForm]       = useState(null);
+  const [saving, setSaving]   = useState(false);
+  const [saved, setSaved]     = useState(false);
 
-  // ── Load data ──
-  const loadVisits = useCallback(async () => {
-    if (!user) return;
-    setVisitsLoading(true);
-    try {
-      const { data, error } = await supabase.from("visits").select("*")
-        .eq("agent_id", user.id).order("ts", { ascending: false });
-      if (error) throw error;
-      setVisits(data || []);
-    } catch (e) { console.error(e); }
-    finally { setVisitsLoading(false); }
-  }, [user]);
+  // Client form
+  const emptyClientForm = { name:"", type:CLIENT_TYPES[0], phone:"", address:"", first_order_date:"", last_order_date:"", last_order_amount:"", reorder_cycle_days:35, commission_rate:8, notes:"" };
+  const [showCF, setShowCF]   = useState(false);
+  const [cf, setCF_]          = useState(emptyClientForm);
+  const [cfSaving, setCFS]    = useState(false);
+  const [editC, setEditC]     = useState(null);
+  const setCF = (k,v) => setCF_(f=>({...f,[k]:v}));
 
-  const loadClients = useCallback(async () => {
-    if (!user) return;
-    setClientsLoading(true);
-    try {
-      const { data, error } = await supabase.from("clients").select("*")
-        .eq("agent_id", user.id).order("created_at", { ascending: false });
-      if (error) throw error;
-      setClients(data || []);
-    } catch (e) { console.error(e); }
-    finally { setClientsLoading(false); }
-  }, [user]);
+  const loadProds = useCallback(async()=>{
+    const { data } = await supabase.from("agent_products").select("product_id,commission_rate,products(*)").eq("agent_id",user.id);
+    const ps=(data||[]).map(ap=>({...ap.products,commission_rate:ap.commission_rate}));
+    setProducts(ps);
+    setForm(f=>f||{business:"",zone:"",contact:CONTACTS[0],lines:[emptyLine(ps)],outcome:OUTCOMES[0],note:""});
+  },[user.id]);
 
-  useEffect(() => { if (user) { loadVisits(); loadClients(); } }, [user, loadVisits, loadClients]);
+  const loadVisits = useCallback(async()=>{
+    setVLoad(true);
+    const { data }=await supabase.from("visits").select("*").eq("agent_id",user.id).order("ts",{ascending:false});
+    setVisits(data||[]); setVLoad(false);
+  },[user.id]);
 
-  // ── Visit handlers ──
-  function setF(k, v) { setForm(f => ({ ...f, [k]: v })); }
-  function updateLine(id, key, val) {
-    setForm(f => ({ ...f, lines: f.lines.map(l => l.id === id ? { ...l, [key]: val } : l) }));
-  }
-  function addLine() { setForm(f => ({ ...f, lines: [...f.lines, emptyLine()] })); }
-  function removeLine(id) {
-    setForm(f => ({ ...f, lines: f.lines.length > 1 ? f.lines.filter(l => l.id !== id) : f.lines }));
-  }
+  const loadClients = useCallback(async()=>{
+    setCLoad(true);
+    const { data }=await supabase.from("clients").select("*").eq("agent_id",user.id).order("created_at",{ascending:false});
+    setClients(data||[]); setCLoad(false);
+  },[user.id]);
+
+  useEffect(()=>{ loadProds(); loadVisits(); loadClients(); },[loadProds,loadVisits,loadClients]);
+
+  const setF=(k,v)=>setForm(f=>({...f,[k]:v}));
+  const updLine=(id,k,v)=>setForm(f=>({...f,lines:f.lines.map(l=>l.id===id?{...l,[k]:v}:l)}));
+  const addLine=()=>setForm(f=>({...f,lines:[...f.lines,emptyLine(products)]}));
+  const rmLine=id=>setForm(f=>({...f,lines:f.lines.length>1?f.lines.filter(l=>l.id!==id):f.lines}));
 
   async function logVisit() {
-    if (!form.business.trim() || !user) return;
+    if (!form?.business.trim()) return;
     setSaving(true);
-    const now = new Date();
-    const payload = {
-      id: Date.now(),
-      agent_id: user.id,
-      ts: now.toISOString(),
-      hour: now.getHours(),
-      business: form.business.trim(),
-      zone: form.zone,
-      contact: form.contact,
-      lines: form.lines.map(l => ({ productId: l.productId, boxes: Number(l.boxes), freePots: Number(l.freePots) })),
-      outcome: form.outcome,
-      note: form.note,
-    };
+    const now=new Date();
     try {
-      const { error } = await supabase.from("visits").insert([payload]);
+      const { error }=await supabase.from("visits").insert([{ id:Date.now(), agent_id:user.id, ts:now.toISOString(), hour:now.getHours(), business:form.business.trim(), zone:form.zone, contact:form.contact, lines:form.lines.map(l=>({productId:l.productId,boxes:Number(l.boxes),freePots:Number(l.freePots)})), outcome:form.outcome, note:form.note }]);
       if (error) throw error;
       await loadVisits();
-      setForm({ business: "", zone: "", contact: CONTACTS[0], lines: [emptyLine()], outcome: OUTCOMES[0], note: "" });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 1800);
-    } catch (e) { alert("Erreur: " + e.message); }
+      setForm({business:"",zone:"",contact:CONTACTS[0],lines:[emptyLine(products)],outcome:OUTCOMES[0],note:""});
+      setSaved(true); setTimeout(()=>setSaved(false),2000);
+    } catch(e) { alert("Erreur: "+e.message); }
     finally { setSaving(false); }
   }
 
-  async function convertVisit(id) {
-    await supabase.from("visits").update({ outcome: "Vendu" }).eq("id", id).eq("agent_id", user.id);
-    await loadVisits();
-  }
-
-  async function deleteVisit(id) {
-    await supabase.from("visits").delete().eq("id", id).eq("agent_id", user.id);
-    await loadVisits();
-  }
-
-  // ── Client handlers ──
-  function setCF(k, v) { setClientForm(f => ({ ...f, [k]: v })); }
+  async function convertV(id){ await supabase.from("visits").update({outcome:"Vendu"}).eq("id",id).eq("agent_id",user.id); loadVisits(); }
+  async function deleteV(id) { await supabase.from("visits").delete().eq("id",id).eq("agent_id",user.id); loadVisits(); }
 
   async function saveClient() {
-    if (!clientForm.name.trim() || !user) return;
-    setClientSaving(true);
+    if (!cf.name.trim()) return;
+    setCFS(true);
     try {
-      const payload = {
-        agent_id: user.id,
-        name: clientForm.name.trim(),
-        type: clientForm.type,
-        phone: clientForm.phone,
-        address: clientForm.address,
-        first_order_date: clientForm.first_order_date || null,
-        last_order_date: clientForm.last_order_date || null,
-        last_order_amount: clientForm.last_order_amount ? Number(clientForm.last_order_amount) : null,
-        reorder_cycle_days: Number(clientForm.reorder_cycle_days) || 35,
-        commission_rate: Number(clientForm.commission_rate) || 8,
-        notes: clientForm.notes,
-      };
-      if (editingClient) {
-        const { error } = await supabase.from("clients").update(payload).eq("id", editingClient.id).eq("agent_id", user.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("clients").insert([payload]);
-        if (error) throw error;
-      }
-      setClientForm({ name: "", type: CLIENT_TYPES[0], phone: "", address: "", first_order_date: "", last_order_date: "", last_order_amount: "", reorder_cycle_days: 35, commission_rate: 8, notes: "" });
-      setShowAddClient(false);
-      setEditingClient(null);
-      await loadClients();
-    } catch (e) { alert("Erreur: " + e.message); }
-    finally { setClientSaving(false); }
+      const p={ agent_id:user.id, name:cf.name.trim(), type:cf.type, phone:cf.phone, address:cf.address, first_order_date:cf.first_order_date||null, last_order_date:cf.last_order_date||null, last_order_amount:cf.last_order_amount?Number(cf.last_order_amount):null, reorder_cycle_days:Number(cf.reorder_cycle_days)||35, commission_rate:Number(cf.commission_rate)||8, notes:cf.notes };
+      if (editC) await supabase.from("clients").update(p).eq("id",editC.id).eq("agent_id",user.id);
+      else await supabase.from("clients").insert([p]);
+      setCF_(emptyClientForm); setShowCF(false); setEditC(null); loadClients();
+    } catch(e){ alert("Erreur: "+e.message); }
+    finally { setCFS(false); }
   }
 
-  async function deleteClient(id) {
-    if (!window.confirm("Supprimer ce client ?")) return;
-    await supabase.from("clients").delete().eq("id", id).eq("agent_id", user.id);
-    await loadClients();
+  async function delClient(id){ if(!window.confirm("Supprimer ?"))return; await supabase.from("clients").delete().eq("id",id).eq("agent_id",user.id); loadClients(); }
+
+  async function reorder(c) {
+    const amt=window.prompt(`Montant commande (DT) — ${c.name} ?`);
+    if (!amt) return;
+    await supabase.from("clients").update({ last_order_date:new Date().toISOString().slice(0,10), last_order_amount:Number(amt) }).eq("id",c.id).eq("agent_id",user.id);
+    loadClients();
   }
 
-  async function recordReorder(client) {
-    const amount = window.prompt(`Montant de la commande (DT) pour ${client.name} ?`);
-    if (!amount) return;
-    await supabase.from("clients").update({
-      last_order_date: new Date().toISOString().slice(0, 10),
-      last_order_amount: Number(amount),
-    }).eq("id", client.id).eq("agent_id", user.id);
-    await loadClients();
+  function editClient(c) {
+    setCF_({ name:c.name, type:c.type||CLIENT_TYPES[0], phone:c.phone||"", address:c.address||"", first_order_date:c.first_order_date||"", last_order_date:c.last_order_date||"", last_order_amount:c.last_order_amount||"", reorder_cycle_days:c.reorder_cycle_days||35, commission_rate:c.commission_rate||8, notes:c.notes||"" });
+    setEditC(c); setShowCF(true);
   }
 
-  function startEditClient(client) {
-    setClientForm({
-      name: client.name, type: client.type || CLIENT_TYPES[0],
-      phone: client.phone || "", address: client.address || "",
-      first_order_date: client.first_order_date || "",
-      last_order_date: client.last_order_date || "",
-      last_order_amount: client.last_order_amount || "",
-      reorder_cycle_days: client.reorder_cycle_days || 35,
-      commission_rate: client.commission_rate || 8,
-      notes: client.notes || "",
-    });
-    setEditingClient(client);
-    setShowAddClient(true);
-  }
+  // Stats
+  const sold=visits.filter(v=>v.outcome==="Vendu");
+  const followups=visits.filter(v=>v.outcome==="Intéressé"||v.outcome==="Revenir");
+  const total=visits.length;
+  const convRate=total?Math.round(sold.length/total*100):0;
+  let tGross=0,tInv=0,tBoxes=0;
+  sold.forEach(v=>{ const f=calcFin(v.lines,products); tGross+=f.gross; tInv+=f.inv; (v.lines||[]).forEach(l=>{tBoxes+=Number(l.boxes||0);}); });
+  visits.filter(v=>v.outcome!=="Vendu").forEach(v=>{tInv+=calcFin(v.lines,products).inv;});
+  const urgentClients=clients.filter(c=>{ const d=daysUntil(c.last_order_date,c.reorder_cycle_days); return d!==null&&d<=5; });
+  const totalComm=clients.reduce((s,c)=>!c.last_order_amount||!c.commission_rate?s:s+(c.last_order_amount*c.commission_rate/100),0);
+  const formFin=form?calcFin(form.lines,products):{gross:0,inv:0,net:0};
+  const todayStr=new Date().toDateString();
 
-  // ── Stats ──
-  const sold = visits.filter(v => v.outcome === "Vendu");
-  const followups = visits.filter(v => v.outcome === "Intéressé" || v.outcome === "Revenir");
-  const total = visits.length;
-  const convRate = total ? Math.round((sold.length / total) * 100) : 0;
-  let totalGross = 0, totalInvestment = 0, totalBoxes = 0;
-  sold.forEach(v => {
-    const f = calcVisitFinancials(v.lines);
-    totalGross += f.gross; totalInvestment += f.investment;
-    (v.lines||[]).forEach(l => { totalBoxes += Number(l.boxes||0); });
-  });
-  visits.filter(v => v.outcome !== "Vendu").forEach(v => { totalInvestment += calcVisitFinancials(v.lines).investment; });
-  const totalNet = totalGross - totalInvestment;
-  const prodBoxes = {};
-  sold.forEach(v => (v.lines||[]).forEach(l => { prodBoxes[l.productId] = (prodBoxes[l.productId]||0) + Number(l.boxes||0); }));
-  const bestProd = Object.entries(prodBoxes).sort((a,b) => b[1]-a[1])[0];
-  const bestProdName = bestProd ? PRODUCTS.find(p => p.id === bestProd[0])?.name : null;
-  const contactCount = {};
-  sold.forEach(v => { contactCount[v.contact] = (contactCount[v.contact]||0) + 1; });
-  const bestContact = Object.entries(contactCount).sort((a,b) => b[1]-a[1])[0];
-  const hourCount = {};
-  sold.forEach(v => { const slot = `${v.hour}h-${v.hour+1}h`; hourCount[slot] = (hourCount[slot]||0) + 1; });
-  const bestHour = Object.entries(hourCount).sort((a,b) => b[1]-a[1])[0];
-  const zoneFollowups = {};
-  followups.forEach(v => { if (v.zone) zoneFollowups[v.zone] = (zoneFollowups[v.zone]||0) + 1; });
-  const bestZone = Object.entries(zoneFollowups).sort((a,b) => b[1]-a[1])[0];
-  const todayStr = new Date().toDateString();
-  const todayVisits = visits.filter(v => new Date(v.ts).toDateString() === todayStr).length;
-  const todaySales = sold.filter(v => new Date(v.ts).toDateString() === todayStr).length;
-  const formFinancials = calcVisitFinancials(form.lines);
-  const urgentClients = clients.filter(c => { const d = getDaysUntilReorder(c.last_order_date, c.reorder_cycle_days); return d !== null && d <= 5; });
-  const totalProjectedCommission = clients.reduce((sum, c) => !c.last_order_amount || !c.commission_rate ? sum : sum + (c.last_order_amount * c.commission_rate / 100), 0);
-
-  const tabs = [
-    { id: "log", label: "📋 Log" },
-    { id: "followup", label: `🔁 (${followups.length})` },
-    { id: "clients", label: `👥 Clients${urgentClients.length > 0 ? " 🔴" : ""}` },
-    { id: "dash", label: "📊 Stats" },
-    { id: "nba", label: "🎯 Action" },
+  const agentTabs=[
+    { id:"log",      icon:"📋", label:"Log",      badge:0 },
+    { id:"followup", icon:"🔁", label:"Relances",  badge:followups.length },
+    { id:"clients",  icon:"👥", label:"Clients",   badge:urgentClients.length },
+    { id:"dash",     icon:"📊", label:"Stats",     badge:0 },
+    { id:"nba",      icon:"🎯", label:"Action",    badge:0 },
   ];
 
-  // ── Render ──
-  if (authLoading) return <div style={{ ...S.app, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}><div style={{ color: "#8a7a60", fontSize: 14 }}>Chargement...</div></div>;
-  if (!user) return <AuthScreen onAuth={setUser} />;
+  if (!form) return <div style={{ background:T.bg, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}><div style={{ color:T.textSub }}>Chargement...</div></div>;
 
   return (
-    <div style={S.app}>
-      <div style={S.header}>
+    <div style={{ background:T.bg, minHeight:"100vh", maxWidth:480, margin:"0 auto", fontFamily:"'Inter',sans-serif", color:T.text, paddingBottom:90 }}>
+      {/* Header */}
+      <div style={{ background:`linear-gradient(135deg, ${T.surface}, ${T.bg})`, padding:"16px 20px 12px", borderBottom:`1px solid ${T.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <div>
-          <span style={S.logo}>Dulcéa</span>
-          <span style={S.sub}>Sales Tracker</span>
+          <EBLogo size="sm" />
+          <div style={{ fontSize:11, color:T.textSub, marginTop:2 }}>{agent?.full_name}</div>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {visits.length > 0 && <button style={S.exportBtn} onClick={() => exportCSV(visits)}>⬇ CSV</button>}
-          <button style={{ ...S.exportBtn, borderColor: "#f87171", color: "#f87171" }} onClick={handleSignOut}>Déco</button>
+        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+          {visits.length>0 && <Btn size="sm" variant="ghost" onClick={()=>exportCSV(visits,products)}>⬇ CSV</Btn>}
+          <Btn size="sm" variant="ghost" onClick={onSignOut}>Déco</Btn>
         </div>
       </div>
 
-      <div style={S.tabs}>
-        {tabs.map(t => (
-          <button key={t.id} style={{ ...S.tab, ...(tab === t.id ? S.tabActive : {}) }}
-            onClick={() => setTab(t.id)}>{t.label}</button>
-        ))}
-      </div>
+      <div style={{ padding:"16px 16px 0" }}>
 
-      <div style={S.body}>
+        {/* LOG */}
+        {tab==="log" && <>
+          <Input label="Point de vente" value={form.business} onChange={v=>setF("business",v)} placeholder="Café, restaurant, grossiste..." />
+          <Input label="Zone" value={form.zone} onChange={v=>setF("zone",v)} placeholder="Aouina, Lac, Ennasr..." />
 
-        {/* ── LOG TAB ── */}
-        {tab === "log" && (
-          <div>
-            <Row label="Café / Shop">
-              <input style={S.input} placeholder="Nom du café" value={form.business}
-                onChange={e => setF("business", e.target.value)} />
-            </Row>
-            <Row label="Zone">
-              <input style={S.input} placeholder="Ex: Centre-ville, Lac..." value={form.zone}
-                onChange={e => setF("zone", e.target.value)} />
-            </Row>
-            <Row label="Contact">
-              <div style={S.pills}>
-                {CONTACTS.map(c => (
-                  <button key={c} style={{ ...S.pill, ...(form.contact === c ? S.pillActive : {}) }}
-                    onClick={() => setF("contact", c)}>{c}</button>
-                ))}
-              </div>
-            </Row>
-            <div style={S.label}>Produits</div>
-            {form.lines.map(line => (
-              <div key={line.id} style={S.lineBox}>
-                <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
-                  <select style={{ ...S.select, flex: 1 }} value={line.productId}
-                    onChange={e => updateLine(line.id, "productId", e.target.value)}>
-                    {PRODUCTS.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  {form.lines.length > 1 && <button style={S.removeBtn} onClick={() => removeLine(line.id)}>✕</button>}
-                </div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={S.microLabel}>Boxes vendues</div>
-                    <input style={S.inputSm} type="number" min="0" value={line.boxes}
-                      onChange={e => updateLine(line.id, "boxes", e.target.value)} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={S.microLabel}>Pots offerts 🎁</div>
-                    <input style={S.inputSm} type="number" min="0" value={line.freePots}
-                      onChange={e => updateLine(line.id, "freePots", e.target.value)} />
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={S.microLabel}>Valeur</div>
-                    <div style={S.lineVal}>{fmt((PRODUCTS.find(p => p.id === line.productId)?.price||0) * 12 * Number(line.boxes||0))} DT</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-            <button style={S.addLineBtn} onClick={addLine}>+ Ajouter un produit</button>
-            {(formFinancials.gross > 0 || formFinancials.investment > 0) && (
-              <div style={S.previewBox}>
-                <FinRow label="Brut" value={`${fmt(formFinancials.gross)} DT`} />
-                <FinRow label="Investissement" value={`- ${fmt(formFinancials.investment)} DT`} color="#f87171" />
-                <FinRow label="Net" value={`${fmt(formFinancials.net)} DT`} bold accent />
-              </div>
-            )}
-            <Row label="Résultat">
-              <div style={S.pills}>
-                {OUTCOMES.map(o => (
-                  <button key={o} style={{ ...S.pill, ...(form.outcome === o ? { background: OUTCOME_COLOR[o], color: "#111", borderColor: OUTCOME_COLOR[o] } : {}) }}
-                    onClick={() => setF("outcome", o)}>{o}</button>
-                ))}
-              </div>
-            </Row>
-            <Row label="Note">
-              <input style={S.input} placeholder="Optionnel..." value={form.note}
-                onChange={e => setF("note", e.target.value)} />
-            </Row>
-            <button style={{ ...S.btn, ...(saved ? S.btnSaved : {}), opacity: saving ? 0.7 : 1 }}
-              onClick={logVisit} disabled={saving}>
-              {saving ? "Enregistrement..." : saved ? "✓ Enregistré !" : "Enregistrer la visite"}
-            </button>
-            {visitsLoading && <div style={S.empty}>Chargement...</div>}
-            {!visitsLoading && visits.length > 0 && (
-              <div style={{ marginTop: 20 }}>
-                <div style={S.sectionTitle}>Visites récentes</div>
-                {visits.slice(0, 5).map(v => <VisitCard key={v.id} v={v} onDelete={() => deleteVisit(v.id)} />)}
-              </div>
-            )}
+          <div style={{ marginBottom:14 }}>
+            <div style={{ fontSize:11, color:T.textSub, fontWeight:600, textTransform:"uppercase", letterSpacing:1, marginBottom:7 }}>Contact</div>
+            <Pills options={CONTACTS} value={form.contact} onChange={v=>setF("contact",v)} />
           </div>
-        )}
 
-        {/* ── FOLLOWUP TAB ── */}
-        {tab === "followup" && (
-          <div>
-            <div style={S.sectionTitle}>À relancer ({followups.length})</div>
-            {visitsLoading && <div style={S.empty}>Chargement...</div>}
-            {!visitsLoading && followups.length === 0 && <div style={S.empty}>Aucune relance en attente 🎉</div>}
-            {followups.map(v => (
-              <div key={v.id} style={S.card}>
-                <div style={S.cardTop}>
-                  <span style={S.bizName}>{v.business}</span>
-                  <span style={{ ...S.badge, background: OUTCOME_COLOR[v.outcome] }}>{v.outcome}</span>
-                </div>
-                <div style={S.cardMeta}>{v.zone && `📍 ${v.zone} · `}{v.contact}</div>
-                <div style={S.cardMeta}>
-                  {(v.lines||[]).map(l => { const p = PRODUCTS.find(p=>p.id===l.productId); return p ? `${p.name}${Number(l.freePots)>0?` (+${l.freePots}🎁)`:""}` : ""; }).filter(Boolean).join(" · ")}
-                </div>
-                {v.note && <div style={S.note}>"{v.note}"</div>}
-                <div style={S.cardMeta}>{new Date(v.ts).toLocaleDateString("fr-FR")}</div>
-                <div style={S.cardActions}>
-                  <button style={S.btnSm} onClick={() => convertVisit(v.id)}>✓ Vendu</button>
-                  <button style={{ ...S.btnSm, background: "#333" }} onClick={() => deleteVisit(v.id)}>Supprimer</button>
+          <div style={{ fontSize:11, color:T.textSub, fontWeight:600, textTransform:"uppercase", letterSpacing:1, marginBottom:8 }}>Produits</div>
+          {products.length===0 && <div style={{ background:T.surfaceHi, border:`1px dashed ${T.border}`, borderRadius:10, padding:"16px", textAlign:"center", fontSize:13, color:T.textDim, marginBottom:12 }}>Aucun produit assigné. Contactez votre responsable.</div>}
+
+          {form.lines.map(line=>(
+            <div key={line.id} style={{ background:T.surfaceHi, border:`1px solid ${T.border}`, borderRadius:12, padding:"13px", marginBottom:8 }}>
+              <div style={{ display:"flex", gap:6, alignItems:"center", marginBottom:10 }}>
+                <select style={{ flex:1, background:T.surface, border:`1px solid ${T.border}`, borderRadius:8, padding:"9px 11px", color:T.text, fontSize:13, outline:"none" }}
+                  value={line.productId} onChange={e=>updLine(line.id,"productId",e.target.value)}>
+                  {products.map(p=><option key={p.id} value={p.id}>{p.name} — {p.price} DT</option>)}
+                </select>
+                {form.lines.length>1 && <button onClick={()=>rmLine(line.id)} style={{ background:"#1f0a0a", border:"none", color:T.danger, borderRadius:8, padding:"8px 11px", cursor:"pointer", fontSize:13 }}>✕</button>}
+              </div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+                {[["Boxes vendues","boxes"],["Pots offerts 🎁","freePots"]].map(([lbl,key])=>(
+                  <div key={key}>
+                    <div style={{ fontSize:10, color:T.textDim, marginBottom:4, textTransform:"uppercase", letterSpacing:0.5 }}>{lbl}</div>
+                    <input style={{ width:"100%", background:T.surface, border:`1px solid ${T.border}`, borderRadius:7, padding:"8px 10px", color:T.text, fontSize:14, outline:"none" }}
+                      type="number" min="0" value={line[key]} onChange={e=>updLine(line.id,key,e.target.value)} />
+                  </div>
+                ))}
+                <div>
+                  <div style={{ fontSize:10, color:T.textDim, marginBottom:4, textTransform:"uppercase", letterSpacing:0.5 }}>Valeur</div>
+                  <div style={{ padding:"8px 0", fontFamily:"'Bebas Neue',sans-serif", fontSize:16, color:T.gold }}>
+                    {fmt((products.find(p=>p.id===line.productId)?.price||0)*12*Number(line.boxes||0))} DT
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-
-        {/* ── CLIENTS TAB ── */}
-        {tab === "clients" && (
-          <div>
-            <div style={S.grid2}>
-              <StatBox label="Clients actifs" value={clients.length} />
-              <StatBox label="Commission / cycle" value={`${fmtShort(totalProjectedCommission)} DT`} accent />
             </div>
-            {urgentClients.length > 0 && (
-              <div style={S.urgentBanner}>🔴 {urgentClients.length} client(s) à recontacter cette semaine</div>
-            )}
-            <button style={{ ...S.btn, marginBottom: 16 }}
-              onClick={() => { setEditingClient(null); setShowAddClient(s => !s); }}>
-              {showAddClient ? "✕ Annuler" : "+ Nouveau client"}
+          ))}
+
+          {products.length>0 && (
+            <button onClick={addLine} style={{ width:"100%", padding:"9px", background:"none", border:`1px dashed ${T.border}`, borderRadius:10, color:T.textDim, cursor:"pointer", fontSize:13, marginBottom:12 }}>
+              + Ajouter un produit
             </button>
-            {showAddClient && (
-              <div style={S.clientFormBox}>
-                <div style={S.sectionTitle}>{editingClient ? "Modifier" : "Nouveau client"}</div>
-                <Row label="Nom *"><input style={S.input} placeholder="Café El Amal..." value={clientForm.name} onChange={e => setCF("name", e.target.value)} /></Row>
-                <Row label="Type">
-                  <div style={S.pills}>{CLIENT_TYPES.map(t => <button key={t} style={{ ...S.pill, ...(clientForm.type===t?S.pillActive:{}) }} onClick={() => setCF("type", t)}>{t}</button>)}</div>
-                </Row>
-                <Row label="Téléphone"><input style={S.input} placeholder="+216 XX XXX XXX" value={clientForm.phone} onChange={e => setCF("phone", e.target.value)} /></Row>
-                <Row label="Zone"><input style={S.input} placeholder="Lac, Centre-ville..." value={clientForm.address} onChange={e => setCF("address", e.target.value)} /></Row>
-                <Row label="Date première commande"><input style={S.input} type="date" value={clientForm.first_order_date} onChange={e => setCF("first_order_date", e.target.value)} /></Row>
-                <Row label="Date dernière commande"><input style={S.input} type="date" value={clientForm.last_order_date} onChange={e => setCF("last_order_date", e.target.value)} /></Row>
-                <Row label="Montant dernière commande (DT)"><input style={S.input} type="number" placeholder="Ex: 250" value={clientForm.last_order_amount} onChange={e => setCF("last_order_amount", e.target.value)} /></Row>
-                <Row label="Cycle réappro (jours)">
-                  <input style={S.input} type="number" value={clientForm.reorder_cycle_days} onChange={e => setCF("reorder_cycle_days", e.target.value)} />
-                  <div style={{ fontSize: 11, color: "#8a7a60", marginTop: 4 }}>Jours entre chaque commande (ex: 35)</div>
-                </Row>
-                <Row label="Taux commission (%)"><input style={S.input} type="number" value={clientForm.commission_rate} onChange={e => setCF("commission_rate", e.target.value)} /></Row>
-                <Row label="Notes"><input style={S.input} placeholder="Infos utiles..." value={clientForm.notes} onChange={e => setCF("notes", e.target.value)} /></Row>
-                <button style={{ ...S.btn, opacity: clientSaving ? 0.6 : 1 }} onClick={saveClient} disabled={clientSaving}>
-                  {clientSaving ? "Enregistrement..." : editingClient ? "Mettre à jour" : "Ajouter"}
-                </button>
+          )}
+
+          {(formFin.gross>0||formFin.inv>0) && <FinBlock gross={formFin.gross} inv={formFin.inv} net={formFin.net} />}
+
+          <div style={{ marginBottom:14 }}>
+            <div style={{ fontSize:11, color:T.textSub, fontWeight:600, textTransform:"uppercase", letterSpacing:1, marginBottom:7 }}>Résultat</div>
+            <Pills options={OUTCOMES} value={form.outcome} onChange={v=>setF("outcome",v)} colorMap={OUTCOME_COLOR} />
+          </div>
+
+          <Input label="Note" value={form.note} onChange={v=>setF("note",v)} placeholder="Optionnel..." />
+
+          <button className="eb-btn" onClick={logVisit} disabled={saving} style={{
+            width:"100%", padding:"14px", border:"none", borderRadius:12, fontSize:15, fontWeight:700, cursor:saving?"not-allowed":"pointer", transition:"all 0.2s",
+            background: saved ? T.success : T.accent,
+            color: "#fff", opacity:saving?0.7:1,
+          }}>
+            {saving ? "Enregistrement..." : saved ? "✓ Visite enregistrée !" : "Enregistrer la visite"}
+          </button>
+
+          {!vLoading && visits.length>0 && <>
+            <SectionTitle>Visites récentes</SectionTitle>
+            {visits.slice(0,5).map(v=><AgentVisitCard key={v.id} v={v} products={products} onDelete={()=>deleteV(v.id)} />)}
+          </>}
+        </>}
+
+        {/* FOLLOWUP */}
+        {tab==="followup" && <>
+          <SectionTitle>À relancer · {followups.length}</SectionTitle>
+          {vLoading && <EmptyState icon="⚓" title="Chargement..." />}
+          {!vLoading && followups.length===0 && <EmptyState icon="🎉" title="Aucune relance" sub="Tous vos prospects ont été traités" />}
+          {followups.map(v=>(
+            <Card key={v.id} accent={OUTCOME_COLOR[v.outcome]}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
+                <div style={{ fontWeight:700, fontSize:15 }}>{v.business}</div>
+                <Badge color={OUTCOME_COLOR[v.outcome]}>{OUTCOME_ICON[v.outcome]} {v.outcome}</Badge>
               </div>
-            )}
-            {clientsLoading && <div style={S.empty}>Chargement...</div>}
-            {!clientsLoading && clients.length === 0 && !showAddClient && <div style={S.empty}>Aucun client encore.</div>}
-            {clients.map(c => {
-              const daysLeft = getDaysUntilReorder(c.last_order_date, c.reorder_cycle_days);
-              const status = getReorderStatus(daysLeft);
-              const proj = c.last_order_amount && c.commission_rate ? (c.last_order_amount * c.commission_rate / 100).toFixed(2) : null;
-              return (
-                <div key={c.id} style={{ ...S.card, borderLeft: `3px solid ${status.color}` }}>
-                  <div style={S.cardTop}>
-                    <span style={S.bizName}>{c.name}</span>
-                    <span style={{ ...S.badge, background: "#2d1f0a", color: status.color, border: `1px solid ${status.color}` }}>{status.label}</span>
-                  </div>
-                  <div style={S.cardMeta}>{c.type && `${c.type} · `}{c.address && `📍 ${c.address}`}</div>
-                  {c.phone && <div style={S.cardMeta}>📞 {c.phone}</div>}
-                  <div style={{ display: "flex", gap: 16, marginTop: 6, marginBottom: 4 }}>
-                    {c.last_order_amount && <div style={{ fontSize: 12 }}><span style={{ color: "#8a7a60" }}>Dernière cmd: </span><span style={{ color: "#e8d5b0" }}>{c.last_order_amount} DT</span></div>}
-                    {proj && <div style={{ fontSize: 12 }}><span style={{ color: "#8a7a60" }}>Commission: </span><span style={{ color: "#c8a96e", fontWeight: 700 }}>{proj} DT</span></div>}
-                  </div>
-                  {c.last_order_date && <div style={S.cardMeta}>Dernière commande: {new Date(c.last_order_date).toLocaleDateString("fr-FR")}</div>}
-                  {c.notes && <div style={S.note}>"{c.notes}"</div>}
-                  <div style={S.cardActions}>
-                    <button style={S.btnSm} onClick={() => recordReorder(c)}>✓ Nouvelle commande</button>
-                    <button style={{ ...S.btnSm, background: "#2d2a1a", color: "#c8a96e" }} onClick={() => startEditClient(c)}>✎</button>
-                    <button style={{ ...S.btnSm, background: "#2d1a1a", color: "#f87171" }} onClick={() => deleteClient(c.id)}>✕</button>
-                  </div>
+              <div style={{ fontSize:12, color:T.textSub, marginBottom:4 }}>{v.zone&&`📍 ${v.zone} · `}{v.contact}</div>
+              <div style={{ fontSize:12, color:T.textDim, marginBottom:6 }}>{(v.lines||[]).map(l=>{ const p=products.find(p=>p.id===l.productId); return p?`${p.name}${Number(l.freePots)>0?` (+${l.freePots}🎁)`:""}`:""; }).filter(Boolean).join(" · ")}</div>
+              {v.note && <div style={{ fontSize:12, color:T.textSub, fontStyle:"italic", marginBottom:8 }}>"{v.note}"</div>}
+              <div style={{ fontSize:11, color:T.textDim, marginBottom:10 }}>{new Date(v.ts).toLocaleDateString("fr-FR")}</div>
+              <div style={{ display:"flex", gap:8 }}>
+                <Btn size="sm" variant="success" onClick={()=>convertV(v.id)}>✓ Vendu</Btn>
+                <Btn size="sm" variant="danger" onClick={()=>deleteV(v.id)}>Supprimer</Btn>
+              </div>
+            </Card>
+          ))}
+        </>}
+
+        {/* CLIENTS */}
+        {tab==="clients" && <>
+          <StatGrid stats={[{ label:"Clients actifs", value:clients.length },{ label:"Commission / cycle", value:`${fmtS(totalComm)} DT`, accent:true }]} />
+          {urgentClients.length>0 && (
+            <div style={{ background:"#1f0a0a", border:`1px solid ${T.danger}44`, borderRadius:10, padding:"10px 14px", marginBottom:14, fontSize:13, color:T.danger, display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ fontSize:16 }}>🔴</span> {urgentClients.length} client(s) à recontacter cette semaine
+            </div>
+          )}
+          <Btn style={{ width:"100%", marginBottom:16 }} onClick={()=>{ setEditC(null); setCF_(emptyClientForm); setShowCF(s=>!s); }}>
+            {showCF?"✕ Annuler":"+ Nouveau client"}
+          </Btn>
+          {showCF && (
+            <Card>
+              <SectionTitle>{editC?"Modifier le client":"Nouveau client"}</SectionTitle>
+              <Input label="Nom *" value={cf.name} onChange={v=>setCF("name",v)} placeholder="Café El Amal..." />
+              <div style={{ marginBottom:14 }}>
+                <div style={{ fontSize:11, color:T.textSub, fontWeight:600, textTransform:"uppercase", letterSpacing:1, marginBottom:7 }}>Type</div>
+                <Pills options={CLIENT_TYPES} value={cf.type} onChange={v=>setCF("type",v)} />
+              </div>
+              <Input label="Téléphone" value={cf.phone} onChange={v=>setCF("phone",v)} placeholder="+216 XX XXX XXX" />
+              <Input label="Zone / Adresse" value={cf.address} onChange={v=>setCF("address",v)} placeholder="Lac, Centre-ville..." />
+              <Input label="Date première commande" value={cf.first_order_date} onChange={v=>setCF("first_order_date",v)} type="date" />
+              <Input label="Date dernière commande" value={cf.last_order_date} onChange={v=>setCF("last_order_date",v)} type="date" />
+              <Input label="Montant dernière commande (DT)" value={cf.last_order_amount} onChange={v=>setCF("last_order_amount",v)} placeholder="250" type="number" />
+              <Input label="Cycle réapprovisionnement (jours)" value={cf.reorder_cycle_days} onChange={v=>setCF("reorder_cycle_days",v)} type="number" hint="Nombre de jours entre chaque commande (ex: 35)" />
+              <Input label="Taux commission (%)" value={cf.commission_rate} onChange={v=>setCF("commission_rate",v)} type="number" />
+              <Input label="Notes" value={cf.notes} onChange={v=>setCF("notes",v)} placeholder="Préférences, infos utiles..." />
+              <Btn style={{ width:"100%" }} onClick={saveClient} disabled={cfSaving}>{cfSaving?"Enregistrement...":editC?"Mettre à jour":"Ajouter le client"}</Btn>
+            </Card>
+          )}
+          {cLoading && <EmptyState icon="⚓" title="Chargement..." />}
+          {!cLoading && clients.length===0 && !showCF && <EmptyState icon="🏪" title="Aucun client" sub="Ajoutez vos premiers clients pour suivre vos commissions" />}
+          {clients.map(c=>{
+            const days=daysUntil(c.last_order_date,c.reorder_cycle_days);
+            const status=reorderStatus(days);
+            const proj=c.last_order_amount&&c.commission_rate?(c.last_order_amount*c.commission_rate/100).toFixed(2):null;
+            return (
+              <Card key={c.id} accent={status.color}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:6 }}>
+                  <div style={{ fontWeight:700, fontSize:15 }}>{c.name}</div>
+                  <Badge color={status.color}>{status.label}</Badge>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                <div style={{ fontSize:12, color:T.textSub, marginBottom:4 }}>{c.type&&`${c.type} · `}{c.address&&`📍 ${c.address}`}</div>
+                {c.phone && <div style={{ fontSize:12, color:T.textSub, marginBottom:4 }}>📞 {c.phone}</div>}
+                <div style={{ display:"flex", gap:16, margin:"8px 0" }}>
+                  {c.last_order_amount && <div style={{ fontSize:12 }}><span style={{ color:T.textDim }}>Cmd: </span><span style={{ color:T.text }}>{c.last_order_amount} DT</span></div>}
+                  {proj && <div style={{ fontSize:12 }}><span style={{ color:T.textDim }}>Commission: </span><span style={{ color:T.gold, fontWeight:700 }}>{proj} DT</span></div>}
+                </div>
+                {c.last_order_date && <div style={{ fontSize:11, color:T.textDim, marginBottom:6 }}>Dernière commande: {new Date(c.last_order_date).toLocaleDateString("fr-FR")}</div>}
+                {c.notes && <div style={{ fontSize:12, color:T.textSub, fontStyle:"italic", marginBottom:8 }}>"{c.notes}"</div>}
+                <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                  <Btn size="sm" variant="success" onClick={()=>reorder(c)}>✓ Nouvelle commande</Btn>
+                  <Btn size="sm" variant="ghost" onClick={()=>editClient(c)}>✎</Btn>
+                  <Btn size="sm" variant="danger" onClick={()=>delClient(c.id)}>✕</Btn>
+                </div>
+              </Card>
+            );
+          })}
+        </>}
 
-        {/* ── DASH TAB ── */}
-        {tab === "dash" && (
-          <div>
-            {visitsLoading ? <div style={S.empty}>Chargement...</div> : <>
-              <div style={S.grid2}>
-                <StatBox label="Visites totales" value={total} />
-                <StatBox label="Ventes" value={sold.length} />
-                <StatBox label="Taux conv." value={`${convRate}%`} accent />
-                <StatBox label="Boxes vendues" value={fmtShort(totalBoxes)} />
-              </div>
-              <div style={S.sectionTitle}>Financier</div>
-              <div style={S.finBlock}>
-                <FinRow label="CA brut" value={`${fmt(totalGross)} DT`} />
-                <FinRow label="Investissement (échantillons)" value={`- ${fmt(totalInvestment)} DT`} color="#f87171" />
-                <FinRow label="Revenu net" value={`${fmt(totalNet)} DT`} bold accent />
-              </div>
-              <div style={S.sectionTitle}>Aujourd'hui</div>
-              <div style={S.grid2}>
-                <StatBox label="Visites" value={todayVisits} />
-                <StatBox label="Ventes" value={todaySales} />
-              </div>
-              {bestProdName && <InfoLine icon="🏆" label="Meilleur produit" value={bestProdName} />}
-              {bestContact && <InfoLine icon="🤝" label="Meilleur contact" value={bestContact[0]} />}
-              {bestHour && <InfoLine icon="⏰" label="Meilleure heure" value={bestHour[0]} />}
-              {bestZone && <InfoLine icon="📍" label="Zone + relances" value={`${bestZone[0]} (${bestZone[1]})`} />}
-              {visits.length > 0 && <button style={{ ...S.btn, marginTop: 20 }} onClick={() => exportCSV(visits)}>⬇ Exporter CSV</button>}
-              {total === 0 && <div style={S.empty}>Enregistrez vos premières visites.</div>}
-            </>}
-          </div>
-        )}
+        {/* DASH */}
+        {tab==="dash" && <>
+          {vLoading ? <EmptyState icon="⚓" title="Chargement..." /> : <>
+            <StatGrid stats={[{label:"Visites totales",value:total},{label:"Ventes",value:sold.length},{label:"Taux conv.",value:`${convRate}%`,accent:true},{label:"Boxes vendues",value:fmtS(tBoxes)}]} />
+            <SectionTitle>Financier</SectionTitle>
+            <FinBlock gross={tGross} inv={tInv} net={tGross-tInv} />
+            <SectionTitle>Aujourd'hui</SectionTitle>
+            <StatGrid stats={[{label:"Visites",value:visits.filter(v=>new Date(v.ts).toDateString()===todayStr).length},{label:"Ventes",value:sold.filter(v=>new Date(v.ts).toDateString()===todayStr).length}]} />
+            {visits.length>0 && <Btn style={{ width:"100%", marginTop:8 }} variant="ghost" onClick={()=>exportCSV(visits,products)}>⬇ Exporter CSV</Btn>}
+          </>}
+        </>}
 
-        {/* ── NBA TAB ── */}
-        {tab === "nba" && (
-          <div>
-            <div style={S.sectionTitle}>Prochaine meilleure action</div>
-            {total === 0 && <div style={S.empty}>Commencez à logger vos visites.</div>}
-            {urgentClients.length > 0 && <NBACard icon="🔴" title="Clients à recontacter" text={`${urgentClients.map(c=>c.name).join(", ")} — commande attendue bientôt.`} />}
-            {followups.length > 0 && <NBACard icon="🔁" title="Priorité relance" text={`${followups.length} prospect(s) à relancer.${bestZone?` Zone "${bestZone[0]}" prioritaire.`:""}`} />}
-            {bestProdName && <NBACard icon="🛒" title="Pitcher en premier" text={`Commencez avec le ${bestProdName} — votre meilleur produit.`} />}
-            {bestContact && <NBACard icon="🎯" title="Bon interlocuteur" text={`Vos meilleures ventes se font avec un(e) ${bestContact[0]}.`} />}
-            {bestHour && <NBACard icon="⏰" title="Meilleur créneau" text={`Vous closez le mieux entre ${bestHour[0]}.`} />}
-            {totalInvestment > 0 && totalGross > 0 && <NBACard icon="🎁" title="Retour échantillons" text={`${fmtShort((totalInvestment/totalGross)*100)}% du CA brut en échantillons. ${(totalInvestment/totalGross)>0.1?"Surveillez ce ratio.":"Bon ratio ✓"}`} />}
-            {convRate < 30 && total >= 5 && <NBACard icon="💡" title="Conseil conversion" text={`Taux à ${convRate}%. Proposez un pot d'essai pour lever les freins.`} />}
-            {convRate >= 50 && total >= 5 && <NBACard icon="🚀" title="Vous êtes en forme !" text={`${convRate}% de conversion — augmentez votre volume de visites !`} />}
-          </div>
-        )}
+        {/* NBA */}
+        {tab==="nba" && <>
+          <SectionTitle>Prochaine action</SectionTitle>
+          {total===0 && <EmptyState icon="🗺️" title="Commencez à logger" sub="Vos recommandations apparaîtront ici après vos premières visites" />}
+          {urgentClients.length>0 && <NBACard icon="🔴" title="Clients à recontacter" text={`${urgentClients.map(c=>c.name).join(", ")} — commande attendue bientôt. Appelez-les maintenant.`} />}
+          {followups.length>0 && <NBACard icon="🔁" title="Relancer vos prospects" text={`${followups.length} prospect(s) en attente de suivi. Ne laissez pas refroidir l'intérêt.`} />}
+          {convRate<30&&total>=5 && <NBACard icon="💡" title="Améliorer la conversion" text={`Taux à ${convRate}%. Proposez un pot d'essai gratuit pour lever les freins à l'achat.`} />}
+          {convRate>=50&&total>=5 && <NBACard icon="🚀" title="Vous êtes en forme !" text={`${convRate}% de conversion — excellent. Augmentez votre volume de visites pour maximiser vos revenus.`} />}
+          {tInv>0&&tGross>0 && <NBACard icon="🎁" title="Retour sur échantillons" text={`${fmtS(tInv/tGross*100)}% du CA brut investi en échantillons. ${tInv/tGross>0.1?"Surveillez ce ratio.":"Excellent ratio ✓"}`} />}
+        </>}
       </div>
+
+      <BottomBar tabs={agentTabs} active={tab} onChange={setTab} />
     </div>
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-function Row({ label, children }) {
-  return <div style={{ marginBottom: 14 }}><div style={S.label}>{label}</div>{children}</div>;
-}
-function FinRow({ label, value, color, bold, accent }) {
+function AgentVisitCard({ v, products, onDelete }) {
+  const fin=calcFin(v.lines,products);
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #2d1f0a", fontSize: 13 }}>
-      <span style={{ color: "#8a7a60" }}>{label}</span>
-      <span style={{ color: accent ? "#c8a96e" : (color||"#e8d5b0"), fontWeight: bold ? 700 : 400 }}>{value}</span>
-    </div>
-  );
-}
-function VisitCard({ v, onDelete }) {
-  const fin = calcVisitFinancials(v.lines);
-  return (
-    <div style={{ ...S.card, marginBottom: 8 }}>
-      <div style={S.cardTop}>
-        <span style={S.bizName}>{v.business}</span>
-        <span style={{ ...S.badge, background: OUTCOME_COLOR[v.outcome] }}>{v.outcome}</span>
+    <Card accent={OUTCOME_COLOR[v.outcome]}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:4 }}>
+        <div style={{ fontWeight:700, fontSize:14 }}>{v.business}</div>
+        <Badge color={OUTCOME_COLOR[v.outcome]}>{OUTCOME_ICON[v.outcome]} {v.outcome}</Badge>
       </div>
-      <div style={S.cardMeta}>{v.zone && `📍 ${v.zone} · `}{v.contact}</div>
-      <div style={S.cardMeta}>
-        {(v.lines||[]).map(l => { const p = PRODUCTS.find(p=>p.id===l.productId); return p ? `${p.name} ×${l.boxes}${Number(l.freePots)>0?` (+${l.freePots}🎁)`:""}` : ""; }).filter(Boolean).join(" · ")}
+      <div style={{ fontSize:12, color:T.textSub, marginBottom:4 }}>{v.zone&&`📍 ${v.zone} · `}{v.contact}</div>
+      <div style={{ fontSize:12, color:T.textDim, marginBottom:fin.gross>0?6:0 }}>{(v.lines||[]).map(l=>{const p=products.find(p=>p.id===l.productId);return p?`${p.name} ×${l.boxes}${Number(l.freePots)>0?` (+${l.freePots}🎁)`:""}`:"";}).filter(Boolean).join(" · ")}</div>
+      {fin.gross>0 && <div style={{ fontSize:12, color:T.gold, marginBottom:6 }}>Brut: {fmt(fin.gross)} · Net: {fmt(fin.net)} DT{fin.inv>0&&<span style={{ color:T.danger }}> · -{fmt(fin.inv)} DT</span>}</div>}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div style={{ fontSize:11, color:T.textDim }}>{new Date(v.ts).toLocaleString("fr-FR",{dateStyle:"short",timeStyle:"short"})}</div>
+        <button onClick={onDelete} style={{ background:"none", border:"none", color:T.textDim, cursor:"pointer", fontSize:13, padding:"4px 8px" }}>✕</button>
       </div>
-      {fin.gross > 0 && <div style={{ fontSize: 12, color: "#c8a96e", marginBottom: 4 }}>Brut: {fmt(fin.gross)} · Net: {fmt(fin.net)} DT{fin.investment > 0 && <span style={{ color: "#f87171" }}> · -{fmt(fin.investment)} DT</span>}</div>}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={S.cardMeta}>{new Date(v.ts).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}</div>
-        <button style={{ ...S.btnSm, background: "#2a2a2a", fontSize: 11, padding: "3px 8px" }} onClick={onDelete}>✕</button>
-      </div>
-    </div>
-  );
-}
-function StatBox({ label, value, accent }) {
-  return (
-    <div style={{ ...S.statBox, ...(accent ? S.statBoxAccent : {}) }}>
-      <div style={S.statVal}>{value}</div>
-      <div style={S.statLabel}>{label}</div>
-    </div>
-  );
-}
-function InfoLine({ icon, label, value }) {
-  return (
-    <div style={S.infoLine}>
-      <span>{icon} {label}</span>
-      <span style={{ color: "#e8d5b0", fontWeight: 600 }}>{value}</span>
-    </div>
-  );
-}
-function NBACard({ icon, title, text }) {
-  return (
-    <div style={S.nbaCard}>
-      <div style={S.nbaIcon}>{icon}</div>
-      <div><div style={S.nbaTitle}>{title}</div><div style={S.nbaText}>{text}</div></div>
-    </div>
+    </Card>
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const S = {
-  app: { fontFamily: "'Georgia', serif", background: "#1a1208", minHeight: "100vh", color: "#f0e6d0", maxWidth: 480, margin: "0 auto" },
-  header: { background: "linear-gradient(135deg, #2d1f0a, #1a1208)", padding: "18px 20px 12px", borderBottom: "1px solid #3d2e14", display: "flex", justifyContent: "space-between", alignItems: "center" },
-  logo: { fontSize: 22, fontWeight: 700, color: "#e8d5b0", letterSpacing: 1 },
-  sub: { fontSize: 12, color: "#8a7a60", marginLeft: 10 },
-  exportBtn: { background: "none", border: "1px solid #c8a96e", color: "#c8a96e", borderRadius: 8, padding: "6px 12px", fontSize: 12, cursor: "pointer" },
-  tabs: { display: "flex", background: "#231808", borderBottom: "1px solid #3d2e14", overflowX: "auto" },
-  tab: { flex: 1, padding: "10px 4px", fontSize: 11, background: "none", border: "none", color: "#8a7a60", cursor: "pointer", whiteSpace: "nowrap" },
-  tabActive: { color: "#e8d5b0", borderBottom: "2px solid #c8a96e", background: "#2d1f0a" },
-  body: { padding: "16px" },
-  sectionTitle: { fontSize: 13, color: "#c8a96e", textTransform: "uppercase", letterSpacing: 1, marginBottom: 12, marginTop: 16 },
-  label: { fontSize: 12, color: "#8a7a60", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 },
-  microLabel: { fontSize: 10, color: "#6a5a40", marginBottom: 3, textTransform: "uppercase", letterSpacing: 0.4 },
-  input: { width: "100%", background: "#2d1f0a", border: "1px solid #3d2e14", borderRadius: 8, padding: "10px 12px", color: "#f0e6d0", fontSize: 14, boxSizing: "border-box", fontFamily: "Georgia, serif" },
-  inputSm: { width: "100%", background: "#2d1f0a", border: "1px solid #3d2e14", borderRadius: 6, padding: "7px 10px", color: "#f0e6d0", fontSize: 14, boxSizing: "border-box", fontFamily: "Georgia, serif" },
-  select: { background: "#2d1f0a", border: "1px solid #3d2e14", borderRadius: 8, padding: "10px 12px", color: "#f0e6d0", fontSize: 13, boxSizing: "border-box", fontFamily: "Georgia, serif" },
-  lineBox: { background: "#231808", border: "1px solid #3d2e14", borderRadius: 10, padding: "12px", marginBottom: 8 },
-  lineVal: { padding: "7px 0", fontSize: 13, color: "#c8a96e", fontWeight: 600 },
-  removeBtn: { background: "#3d1a1a", border: "none", color: "#f87171", borderRadius: 6, padding: "6px 10px", cursor: "pointer", fontSize: 12 },
-  addLineBtn: { width: "100%", padding: "9px", background: "none", border: "1px dashed #3d2e14", borderRadius: 8, color: "#8a7a60", cursor: "pointer", fontSize: 13, marginBottom: 12 },
-  previewBox: { background: "#2d1f0a", border: "1px solid #3d2e14", borderRadius: 10, padding: "10px 14px", marginBottom: 14 },
-  finBlock: { background: "#2d1f0a", border: "1px solid #3d2e14", borderRadius: 10, padding: "10px 14px", marginBottom: 16 },
-  pills: { display: "flex", flexWrap: "wrap", gap: 6 },
-  pill: { padding: "6px 12px", borderRadius: 20, border: "1px solid #3d2e14", background: "#2d1f0a", color: "#8a7a60", cursor: "pointer", fontSize: 12 },
-  pillActive: { background: "#c8a96e", color: "#1a1208", borderColor: "#c8a96e" },
-  btn: { width: "100%", padding: "13px", background: "#c8a96e", color: "#1a1208", border: "none", borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "Georgia, serif" },
-  btnSaved: { background: "#4ade80", color: "#111" },
-  btnSm: { padding: "6px 12px", background: "#c8a96e", color: "#1a1208", border: "none", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer" },
-  card: { background: "#2d1f0a", border: "1px solid #3d2e14", borderRadius: 10, padding: "12px 14px", marginBottom: 10 },
-  cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
-  bizName: { fontWeight: 700, fontSize: 15, color: "#e8d5b0" },
-  badge: { fontSize: 11, padding: "2px 8px", borderRadius: 10, color: "#111", fontWeight: 600 },
-  cardMeta: { fontSize: 12, color: "#8a7a60", marginBottom: 4 },
-  cardActions: { display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" },
-  note: { fontSize: 12, color: "#c8a96e", fontStyle: "italic", marginBottom: 4 },
-  grid2: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 },
-  statBox: { background: "#2d1f0a", border: "1px solid #3d2e14", borderRadius: 10, padding: "14px", textAlign: "center" },
-  statBoxAccent: { background: "#3d2a08", borderColor: "#c8a96e" },
-  statVal: { fontSize: 24, fontWeight: 700, color: "#e8d5b0" },
-  statLabel: { fontSize: 11, color: "#8a7a60", marginTop: 2 },
-  infoLine: { display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #2d1f0a", fontSize: 13, color: "#8a7a60" },
-  nbaCard: { display: "flex", gap: 14, background: "#2d1f0a", border: "1px solid #3d2e14", borderRadius: 12, padding: "14px", marginBottom: 12, alignItems: "flex-start" },
-  nbaIcon: { fontSize: 24, minWidth: 32 },
-  nbaTitle: { fontWeight: 700, color: "#e8d5b0", fontSize: 14, marginBottom: 4 },
-  nbaText: { fontSize: 13, color: "#8a7a60", lineHeight: 1.5 },
-  empty: { color: "#8a7a60", fontSize: 13, textAlign: "center", padding: "30px 0" },
-  clientFormBox: { background: "#231808", border: "1px solid #3d2e14", borderRadius: 12, padding: "16px", marginBottom: 16 },
-  urgentBanner: { background: "#3d1a0a", border: "1px solid #f87171", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#f87171" },
-  authBox: { background: "#2d1f0a", border: "1px solid #3d2e14", borderRadius: 16, padding: "24px" },
-  authTabs: { display: "flex", borderBottom: "1px solid #3d2e14", marginBottom: 4 },
-  authTab: { flex: 1, padding: "10px", background: "none", border: "none", color: "#8a7a60", cursor: "pointer", fontSize: 14, fontFamily: "Georgia, serif" },
-  authTabActive: { color: "#e8d5b0", borderBottom: "2px solid #c8a96e" },
-  authError: { background: "#3d1a0a", border: "1px solid #f87171", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#f87171", marginBottom: 12 },
-  authSuccess: { background: "#0a3d1a", border: "1px solid #4ade80", borderRadius: 8, padding: "10px 12px", fontSize: 13, color: "#4ade80", marginBottom: 12 },
-};
+// ─── Root ─────────────────────────────────────────────────────────────────────
+export default function App() {
+  const [user, setUser]     = useState(null);
+  const [agent, setAgent]   = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  async function loadAgent(uid) {
+    const { data }=await supabase.from("agents").select("*").eq("id",uid).single();
+    setAgent(data||null); setLoading(false);
+  }
+
+  useEffect(()=>{
+    supabase.auth.getSession().then(({data})=>{
+      if (data.session?.user) { setUser(data.session.user); loadAgent(data.session.user.id); }
+      else setLoading(false);
+    });
+    const { data:l }=supabase.auth.onAuthStateChange((_,s)=>{
+      if (s?.user) { setUser(s.user); loadAgent(s.user.id); }
+      else { setUser(null); setAgent(null); setLoading(false); }
+    });
+    return ()=>l.subscription.unsubscribe();
+  },[]);
+
+  async function signOut() { await supabase.auth.signOut(); setUser(null); setAgent(null); }
+
+  if (loading) return (
+    <div style={{ background:T.bg, minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:16 }}>
+      <EBLogo size="md" />
+      <div style={{ fontSize:12, color:T.textDim, animation:"pulse 1.5s infinite" }}>Chargement...</div>
+    </div>
+  );
+
+  if (!user) return <AuthScreen onAuth={u=>{ setUser(u); loadAgent(u.id); }} />;
+  if (!agent||agent.status==="pending") return <PendingScreen status="pending" onSignOut={signOut} />;
+  if (agent.status==="rejected") return <PendingScreen status="rejected" onSignOut={signOut} />;
+  if (agent.role==="kam") return <KAMApp user={user} agent={agent} onSignOut={signOut} />;
+  return <AgentApp user={user} agent={agent} onSignOut={signOut} />;
+}
