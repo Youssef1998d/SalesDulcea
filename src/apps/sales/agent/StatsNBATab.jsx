@@ -1,5 +1,5 @@
 import { useTheme } from "../../../core/theme";
-import { StatGrid, SectionTitle, FinBlock, EmptyState, NBACard, Btn } from "../../ui";
+import { StatGrid, SectionTitle, FinBlock, EmptyState, NBACard, Btn } from "../../../components/ui";
 import { fmtS, exportCSV } from "../../../core/utils";
 
 export function StatsTab({ visits, sold, convRate, tGross, tInv, tBoxes, todayVisits, todaySales, products }) {

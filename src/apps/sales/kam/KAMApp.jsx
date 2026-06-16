@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useTheme } from "../../../core/theme";
 import { OrgHeader } from "../../../components/layout/OrgHeader";
 import { BottomBar } from "../../../components/layout/BottomBar";
-import { Btn, EmptyState } from "../../ui";
+import { Btn, EmptyState } from "../../../components/ui";
 import { supabase } from "../../../core/supabase";
 import { AgentsTab }  from "./AgentsTab";
 import { ProductsTab } from "./ProductsTab";

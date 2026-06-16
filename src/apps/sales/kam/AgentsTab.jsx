@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTheme } from "../../../core/theme";
-import { Card, Badge, Btn, SectionTitle, EmptyState } from "../../ui";
+import { Card, Badge, Btn, SectionTitle, EmptyState } from "../../../components/ui";
 import { fmtS } from "../../../core/utils";
 
 export function AgentsTab({ agents, allVisits, allClients, allSales, products, agentProducts, onApprove, onReject, onRemove, onToggleProduct, onSetCommission }) {

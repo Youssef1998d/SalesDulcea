@@ -1,5 +1,5 @@
 import { useTheme } from "../../../core/theme";
-import { Input, Pills, Btn, FinBlock, SectionTitle, EmptyState, Card, Badge } from "../../ui";
+import { Input, Pills, Btn, FinBlock, SectionTitle, EmptyState, Card, Badge } from "../../../components/ui";
 import { fmt, emptyLine, calcFin } from "../../../core/utils";
 
 const OUTCOMES = ["Vendu","Intéressé","Revenir","Refus"];

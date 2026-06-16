@@ -1,5 +1,5 @@
 import { useTheme } from "../../../core/theme";
-import { Card, Badge, SectionTitle, EmptyState, StatGrid } from "../../ui";
+import { Card, Badge, SectionTitle, EmptyState, StatGrid } from "../../../components/ui";
 import { fmtS } from "../../../core/utils";
 
 export function OverviewTab({ agents, allVisits, allClients, allSales }) {

@@ -1,5 +1,5 @@
 import { useTheme } from "../../../core/theme";
-import { Card, SectionTitle, EmptyState } from "../../ui";
+import { Card, SectionTitle, EmptyState } from "../../../components/ui";
 import { fmtS } from "../../../core/utils";
 
 export function SalesTab({ allSales, products, agents }) {

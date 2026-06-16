@@ -1,5 +1,5 @@
 import { useTheme } from "../../../core/theme";
-import { Card, Badge, Btn, SectionTitle, EmptyState } from "../../ui";
+import { Card, Badge, Btn, SectionTitle, EmptyState } from "../../../components/ui";
 
 const OUTCOME_COLOR = { Vendu:"#34d399", Intéressé:"#fbbf24", Revenir:"#60a5fa", Refus:"#f87171" };
 const OUTCOME_ICON  = { Vendu:"✓", Intéressé:"◎", Revenir:"↺", Refus:"✕" };

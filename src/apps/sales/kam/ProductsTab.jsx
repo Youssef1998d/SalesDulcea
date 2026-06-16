@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTheme } from "../../../core/theme";
-import { Card, Btn, SectionTitle, EmptyState, Input } from "../../ui";
+import { Card, Btn, SectionTitle, EmptyState, Input } from "../../../components/ui";
 
 export function ProductsTab({ products, agentProducts, onSave, onArchive }) {
   const T = useTheme();

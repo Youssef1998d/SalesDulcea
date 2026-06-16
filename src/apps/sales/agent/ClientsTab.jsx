@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTheme } from "../../../core/theme";
-import { Card, Badge, Btn, SectionTitle, EmptyState, StatGrid, Input, Pills } from "../../ui";
+import { Card, Badge, Btn, SectionTitle, EmptyState, StatGrid, Input, Pills } from "../../../components/ui";
 import { daysUntil, reorderStatus, fmtS } from "../../../core/utils";
 
 const CLIENT_TYPES = ["Café","Restaurant","Hôtel","Grossiste","Autre"];

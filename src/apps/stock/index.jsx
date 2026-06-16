@@ -1,5 +1,5 @@
 import { useTheme } from "../../core/theme";
-import { EmptyState } from "../ui";
+import { EmptyState } from "../components/ui";
 
 // Coming soon — shares theme engine, auth, and component library
 export function ComingSoonApp({ name }) {

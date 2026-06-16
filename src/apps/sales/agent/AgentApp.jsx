@@ -2,12 +2,12 @@ import { useState, useEffect } from "react";
 import { useTheme } from "../../../core/theme";
 import { OrgHeader } from "../../../components/layout/OrgHeader";
 import { BottomBar } from "../../../components/layout/BottomBar";
-import { Btn } from "../../ui";
+import { Btn } from "../../../components/ui";
 import { useVisits }  from "../../../hooks/useVisits";
 import { useClients } from "../../../hooks/useClients";
 import { useProducts } from "../../../hooks/useProducts";
 import { useSales }   from "../../../hooks/useSales";
-import { emptyLine, calcFin, fmtS } from "../../../core/utils";
+import { emptyLine, calcFin, fmtS, daysUntil } from "../../../core/utils";
 import { LogTab }        from "./LogTab";
 import { FollowupTab }   from "./FollowupTab";
 import { ClientsTab }    from "./ClientsTab";
@@ -74,7 +74,7 @@ export function AgentApp({ user, agent, onSignOut }) {
   let tGross=0, tInv=0, tBoxes=0;
   sold.forEach(v=>{ const f=calcFin(v.lines,products); tGross+=f.gross; tInv+=f.inv; (v.lines||[]).forEach(l=>{tBoxes+=Number(l.boxes||0);}); });
   visits.filter(v=>v.outcome!=="Vendu").forEach(v=>{tInv+=calcFin(v.lines,products).inv;});
-  const urgentClients = clients.filter(c=>{ const {daysUntil:du}=require("../../../core/utils"); return false; }); // computed in ClientsTab
+  const urgentClients = clients.filter(c=>{ const d=daysUntil(c.last_order_date,c.reorder_cycle_days); return d!==null&&d<=5; });
   const todayStr  = new Date().toDateString();
   const todayV    = visits.filter(v=>new Date(v.ts).toDateString()===todayStr).length;
   const todayS    = sold.filter(v=>new Date(v.ts).toDateString()===todayStr).length;
