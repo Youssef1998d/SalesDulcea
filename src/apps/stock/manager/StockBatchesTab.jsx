@@ -4,19 +4,25 @@ import { Card, Btn, Badge, Input, SectionTitle, EmptyState } from "../../../comp
 
 export function StockBatchesTab({ stock, products, loading, onAdd, onUpdate, onRemove }) {
   const T = useTheme();
-  const [form, setForm] = useState({ product_id:"", quantity:"", batch_label:"", is_future:false, expected_date:"", notes:"" });
+  const [form,  setForm]  = useState({ product_id:"", quantity:"", batch_label:"", is_future:false, expected_date:"", notes:"" });
+  const [error, setError] = useState(null);
 
   async function submit() {
     if (!form.product_id || !form.quantity) return;
-    await onAdd({
-      product_id: form.product_id,
-      quantity: Number(form.quantity),
-      batch_label: form.batch_label || null,
-      is_future: form.is_future,
-      expected_date: form.is_future ? (form.expected_date || null) : null,
-      notes: form.notes || null,
-    });
-    setForm({ product_id:"", quantity:"", batch_label:"", is_future:false, expected_date:"", notes:"" });
+    setError(null);
+    try {
+      await onAdd({
+        product_id: form.product_id,
+        quantity: Number(form.quantity),
+        batch_label: form.batch_label || null,
+        is_future: form.is_future,
+        expected_date: form.is_future ? (form.expected_date || null) : null,
+        notes: form.notes || null,
+      });
+      setForm({ product_id:"", quantity:"", batch_label:"", is_future:false, expected_date:"", notes:"" });
+    } catch (e) {
+      setError(e.message);
+    }
   }
 
   return (
@@ -41,6 +47,7 @@ export function StockBatchesTab({ stock, products, loading, onAdd, onUpdate, onR
           <span style={{ fontSize:13, color:T.textSub }}>Stock futur (à venir)</span>
         </div>
         {form.is_future && <Input label="Date d'arrivée prévue" type="date" value={form.expected_date} onChange={v => setForm({ ...form, expected_date:v })} />}
+        {error && <div style={{ background:"#1f0a0a", border:`1px solid ${T.danger}44`, borderRadius:8, padding:"10px 13px", fontSize:13, color:T.danger, marginBottom:12 }}>{error}</div>}
         <Btn onClick={submit} style={{ width:"100%" }}>Ajouter le lot</Btn>
       </Card>
 

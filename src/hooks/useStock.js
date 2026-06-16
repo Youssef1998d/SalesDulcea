@@ -18,17 +18,20 @@ export function useStock(orgId) {
   }, [orgId]);
 
   async function addBatch(payload) {
-    await supabase.from("stock").insert([{ ...payload, org_id: orgId }]);
+    const { error } = await supabase.from("stock").insert([{ ...payload, org_id: orgId }]);
+    if (error) throw error;
     await load();
   }
 
   async function updateBatch(id, changes) {
-    await supabase.from("stock").update(changes).eq("id", id);
+    const { error } = await supabase.from("stock").update(changes).eq("id", id);
+    if (error) throw error;
     await load();
   }
 
   async function removeBatch(id) {
-    await supabase.from("stock").delete().eq("id", id);
+    const { error } = await supabase.from("stock").delete().eq("id", id);
+    if (error) throw error;
     await load();
   }
 

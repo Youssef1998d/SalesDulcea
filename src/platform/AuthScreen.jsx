@@ -33,12 +33,14 @@ export function AuthScreen({ onAuth }) {
       } else {
         if (!name.trim()) { setError("Nom requis."); setLoading(false); return; }
         const type = ACCOUNT_TYPES.find(t => t.id === accountType);
+        const { data: org } = await supabase.from("organizations").select("id").eq("active", true).limit(1).single();
         const { data, error } = await supabase.auth.signUp({ email, password: pass });
         if (error) throw error;
-        await supabase.from("agents").insert([{
-          id: data.user.id, full_name: name.trim(), phone,
+        const { error: agentError } = await supabase.from("agents").insert([{
+          id: data.user.id, full_name: name.trim(), phone, org_id: org?.id || null,
           role: type.id, permissions: type.permissions, status: "pending",
         }]);
+        if (agentError) throw agentError;
         setOk("Compte créé. En attente d'activation par votre responsable.");
         setMode("login");
       }
