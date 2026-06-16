@@ -11,7 +11,7 @@ export function useOrders({ agentId = null, orgId = null } = {}) {
     setLoading(true);
     let q = supabase
       .from("orders")
-      .select("*, order_lines(*, products(*), stock(*)), agents(full_name)")
+      .select("*, order_lines(*, products(*), stock(*)), agents!orders_agent_id_fkey(full_name)")
       .eq("org_id", orgId)
       .order("created_at", { ascending: false });
     if (agentId) q = q.eq("agent_id", agentId);

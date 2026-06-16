@@ -53,10 +53,12 @@ export function AgentApp({ user, agent, onSignOut }) {
     }
   }, []);
 
-  // Once products load, init form
+  // Init form once on mount; refresh the default line once products arrive so it isn't stuck empty
   useEffect(() => {
-    if (products.length > 0 && !form) {
+    if (!form) {
       setForm({ business:"", zone:"", contact:CONTACTS[0], lines:[emptyLine(products)], outcome:OUTCOMES[0], note:"" });
+    } else if (products.length > 0 && !form.lines[0]?.productId) {
+      setForm(f => ({ ...f, lines:[emptyLine(products)] }));
     }
   }, [products]);
 
