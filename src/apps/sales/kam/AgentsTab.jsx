@@ -4,7 +4,13 @@ import { Card, Badge, Btn, SectionTitle, EmptyState } from "../../../components/
 import { fmtS } from "../../../core/utils";
 import { supabase } from "../../../core/supabase";
 
-export function AgentsTab({ agents, allVisits, allClients, allSales, products, agentProducts, onApprove, onReject, onRemove, onToggleProduct, onRefresh }) {
+const ROLE_LABEL = { agent:"Agent terrain", stock_manager:"Responsable stock" };
+const PERMISSIONS = [
+  { id:"orders",           label:"Commandes" },
+  { id:"stock_management", label:"Gestion stock" },
+];
+
+export function AgentsTab({ agents, allVisits, allClients, allSales, products, agentProducts, onApprove, onReject, onRemove, onToggleProduct, onUpdateRole, onTogglePermission, onRefresh }) {
   const T = useTheme();
   const [assignAgent, setAssignAgent] = useState(null);
 
@@ -16,7 +22,7 @@ export function AgentsTab({ agents, allVisits, allClients, allSales, products, a
   const [bulkDone,   setBulkDone]   = useState(false);
 
   const pending = agents.filter(a => a.status === "pending");
-  const active  = agents.filter(a => a.status === "active" && a.role === "agent");
+  const active  = agents.filter(a => a.status === "active" && (a.role === "agent" || a.role === "stock_manager"));
 
   function agentStats(id) {
     const v     = allVisits.filter(v => v.agent_id === id);
@@ -305,6 +311,44 @@ export function AgentsTab({ agents, allVisits, allClients, allSales, products, a
                 {a.phone && <div style={{ fontSize:12, color:T.textSub, marginTop:2 }}>📞 {a.phone}</div>}
               </div>
               <Badge color={T.success}>Actif</Badge>
+            </div>
+
+            {/* Role */}
+            <div style={{ marginBottom:10 }}>
+              <div style={{ fontSize:11, color:T.textSub, fontWeight:600, textTransform:"uppercase", letterSpacing:1, marginBottom:6 }}>Rôle</div>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:7 }}>
+                {Object.entries(ROLE_LABEL).map(([id, label]) => {
+                  const on = a.role === id;
+                  return (
+                    <button key={id} className="eb-btn" onClick={() => onUpdateRole(a.id, id)} style={{
+                      padding:"7px 14px", borderRadius:20,
+                      border:`1.5px solid ${on?T.accent:T.border}`,
+                      background:on?T.accent+"22":"transparent",
+                      color:on?T.accent:T.textSub,
+                      fontSize:12, fontWeight:600, cursor:"pointer",
+                    }}>{label}</button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Permissions */}
+            <div style={{ marginBottom:10 }}>
+              <div style={{ fontSize:11, color:T.textSub, fontWeight:600, textTransform:"uppercase", letterSpacing:1, marginBottom:6 }}>Permissions</div>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:7 }}>
+                {PERMISSIONS.map(p => {
+                  const on = (a.permissions || []).includes(p.id);
+                  return (
+                    <button key={p.id} className="eb-btn" onClick={() => onTogglePermission(a.id, p.id)} style={{
+                      padding:"7px 14px", borderRadius:20,
+                      border:`1.5px solid ${on?T.gold:T.border}`,
+                      background:on?T.gold+"22":"transparent",
+                      color:on?T.gold:T.textSub,
+                      fontSize:12, fontWeight:600, cursor:"pointer",
+                    }}>{on?"✓ ":""}{p.label}</button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Stats */}

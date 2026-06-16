@@ -42,6 +42,19 @@ export function KAMApp({ user, onSignOut }) {
   async function reject(id)      { await supabase.from("agents").update({status:"rejected"}).eq("id",id); loadAll(); }
   async function removeAgent(id) { if(!window.confirm("Supprimer ?"))return; await supabase.from("agents").delete().eq("id",id); loadAll(); }
 
+  const ROLE_DEFAULT_PERMISSIONS = { agent:["orders"], stock_manager:["orders","stock_management"] };
+  async function updateRole(id, role) {
+    await supabase.from("agents").update({ role, permissions: ROLE_DEFAULT_PERMISSIONS[role] || [] }).eq("id", id);
+    loadAll();
+  }
+  async function togglePermission(id, perm) {
+    const a   = agents.find(a => a.id === id);
+    const cur = a?.permissions || [];
+    const next = cur.includes(perm) ? cur.filter(p => p !== perm) : [...cur, perm];
+    await supabase.from("agents").update({ permissions: next }).eq("id", id);
+    loadAll();
+  }
+
   // ── Product management ─────────────────────────────────────────────────────
   async function saveProduct(payload, existingId) {
     const p = { ...payload, active:true };
@@ -93,6 +106,8 @@ export function KAMApp({ user, onSignOut }) {
             onReject={reject}
             onRemove={removeAgent}
             onToggleProduct={toggleProduct}
+            onUpdateRole={updateRole}
+            onTogglePermission={togglePermission}
             onRefresh={loadAll}
           />
         }

@@ -14,7 +14,8 @@ import { LogTab }        from "./LogTab";
 import { FollowupTab }   from "./FollowupTab";
 import { ClientsTab }    from "./ClientsTab";
 import { StatsTab, NBATab } from "./StatsNBATab";
-import { BrowseTab, OrdersTab } from "../../stock";
+import { BrowseTab, OrdersTab, StockBatchesTab, ManagerOrdersTab } from "../../stock";
+import { supabase } from "../../../core/supabase";
 
 const OUTCOMES = ["Vendu","Intéressé","Revenir","Refus"];
 const CONTACTS = ["Propriétaire","Manager","Employé"];
@@ -26,20 +27,30 @@ export function AgentApp({ user, agent, onSignOut }) {
   const { clients, loading:cLoad, load:loadClients, save:saveClient, remove:removeClient, recordReorder } = useClients(user.id);
   const { products, loadAssigned } = useProducts(user.id);
   const { insertFromVisit } = useSales();
-  const { stock,  loading:stLoad, load:loadStock }  = useStock(agent.org_id);
-  const { orders, loading:orLoad, load:loadOrders, placeOrder } = useOrders({ agentId:user.id, orgId:agent.org_id });
+  const perms       = agent.permissions || [];
+  const canOrder    = perms.includes("orders");
+  const canManage   = perms.includes("stock_management");
 
-  const [tab,    setTab]    = useState("log");
-  const [form,   setForm]   = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [saved,  setSaved]  = useState(false);
+  const { stock, loading:stLoad, load:loadStock, addBatch, updateBatch, removeBatch } = useStock(agent.org_id);
+  const { orders, loading:orLoad, load:loadOrders, placeOrder } = useOrders({ agentId:user.id, orgId:agent.org_id });
+  const { orders:allOrders, loading:allOrLoad, load:loadAllOrders, confirmOrder, rejectOrder, markDelivered } = useOrders({ orgId:agent.org_id });
+
+  const [tab,           setTab]      = useState("log");
+  const [form,          setForm]     = useState(null);
+  const [saving,        setSaving]   = useState(false);
+  const [saved,         setSaved]    = useState(false);
+  const [allProducts,   setAllProducts] = useState([]);
 
   useEffect(() => {
     loadAssigned().then(() => {});
     loadVisits();
     loadClients();
-    loadStock();
-    loadOrders();
+    if (canOrder || canManage) loadStock();
+    if (canOrder)  loadOrders();
+    if (canManage) {
+      loadAllOrders();
+      supabase.from("products").select("*").eq("active", true).order("name").then(({ data }) => setAllProducts(data || []));
+    }
   }, []);
 
   // Once products load, init form
@@ -86,14 +97,17 @@ export function AgentApp({ user, agent, onSignOut }) {
   const todayV    = visits.filter(v=>new Date(v.ts).toDateString()===todayStr).length;
   const todayS    = sold.filter(v=>new Date(v.ts).toDateString()===todayStr).length;
 
+  const pendingOrders = allOrders.filter(o => o.status === "pending").length;
   const tabs = [
     { id:"log",      icon:"📋", label:"Log",     badge:0 },
     { id:"followup", icon:"🔁", label:"Relances", badge:followups.length },
     { id:"clients",  icon:"👥", label:"Clients",  badge:0 },
     { id:"dash",     icon:"📊", label:"Stats",    badge:0 },
     { id:"nba",      icon:"🎯", label:"Action",   badge:0 },
-    { id:"stock",    icon:"📦", label:"Stock",    badge:0 },
-    { id:"orders",   icon:"🧾", label:"Commandes",badge:0 },
+    ...(canOrder  ? [{ id:"stock",   icon:"📦", label:"Stock",     badge:0 },
+                      { id:"orders", icon:"🧾", label:"Commandes", badge:0 }] : []),
+    ...(canManage ? [{ id:"manage-stock",  icon:"🏷️", label:"Gestion stock", badge:0 },
+                      { id:"manage-orders",icon:"✅", label:"Validation",    badge:pendingOrders }] : []),
   ];
 
   if (!form) return (
@@ -112,8 +126,21 @@ export function AgentApp({ user, agent, onSignOut }) {
         {tab==="clients"  && <ClientsTab clients={clients} loading={cLoad} onSave={saveClient} onDelete={removeClient} onReorder={handleReorder} />}
         {tab==="dash"     && <StatsTab visits={visits} sold={sold} convRate={convRate} tGross={tGross} tInv={tInv} tBoxes={tBoxes} todayVisits={todayV} todaySales={todayS} products={products} />}
         {tab==="nba"      && <NBATab total={total} urgentClients={[]} followups={followups} convRate={convRate} tInv={tInv} tGross={tGross} fmtS={fmtS} />}
-        {tab==="stock"    && <BrowseTab stock={stock} loading={stLoad} onPlaceOrder={async lines => { await placeOrder(lines); await loadStock(); }} />}
-        {tab==="orders"   && <OrdersTab orders={orders} loading={orLoad} />}
+        {tab==="stock"    && canOrder  && <BrowseTab stock={stock} loading={stLoad} onPlaceOrder={async lines => { await placeOrder(lines); await loadStock(); }} />}
+        {tab==="orders"   && canOrder  && <OrdersTab orders={orders} loading={orLoad} />}
+        {tab==="manage-stock"  && canManage && (
+          <StockBatchesTab stock={stock} products={allProducts} loading={stLoad} onAdd={addBatch} onUpdate={updateBatch} onRemove={removeBatch} />
+        )}
+        {tab==="manage-orders" && canManage && (
+          <ManagerOrdersTab
+            orders={allOrders}
+            stock={stock}
+            loading={allOrLoad}
+            onConfirm={async (orderId, lines) => { await confirmOrder(orderId, lines, user.id); await loadStock(); }}
+            onReject={id => rejectOrder(id, user.id)}
+            onDeliver={markDelivered}
+          />
+        )}
       </div>
 
       <BottomBar tabs={tabs} active={tab} onChange={setTab} />

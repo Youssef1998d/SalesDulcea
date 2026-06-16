@@ -1,19 +1,25 @@
 import { useState } from "react";
 import { useTheme } from "../core/theme";
 import { EBLogo } from "../components/layout/EBLogo";
-import { Input, Btn } from "../components/ui";
+import { Input, Btn, Pills } from "../components/ui";
 import { supabase } from "../core/supabase";
+
+const ACCOUNT_TYPES = [
+  { id:"agent",         label:"Agent terrain",     permissions:["orders"] },
+  { id:"stock_manager", label:"Responsable stock", permissions:["orders","stock_management"] },
+];
 
 export function AuthScreen({ onAuth }) {
   const T = useTheme();
-  const [mode,    setMode]    = useState("login");
-  const [email,   setEmail]   = useState("");
-  const [pass,    setPass]    = useState("");
-  const [name,    setName]    = useState("");
-  const [phone,   setPhone]   = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState(null);
-  const [ok,      setOk]      = useState(null);
+  const [mode,        setMode]        = useState("login");
+  const [email,       setEmail]       = useState("");
+  const [pass,        setPass]        = useState("");
+  const [name,        setName]        = useState("");
+  const [phone,       setPhone]       = useState("");
+  const [accountType, setAccountType] = useState("agent");
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState(null);
+  const [ok,          setOk]          = useState(null);
 
   async function submit() {
     setError(null); setOk(null);
@@ -26,10 +32,12 @@ export function AuthScreen({ onAuth }) {
         onAuth(data.user);
       } else {
         if (!name.trim()) { setError("Nom requis."); setLoading(false); return; }
+        const type = ACCOUNT_TYPES.find(t => t.id === accountType);
         const { data, error } = await supabase.auth.signUp({ email, password: pass });
         if (error) throw error;
         await supabase.from("agents").insert([{
-          id: data.user.id, full_name: name.trim(), phone, role: "agent", status: "pending",
+          id: data.user.id, full_name: name.trim(), phone,
+          role: type.id, permissions: type.permissions, status: "pending",
         }]);
         setOk("Compte créé. En attente d'activation par votre responsable.");
         setMode("login");
@@ -63,6 +71,11 @@ export function AuthScreen({ onAuth }) {
         {mode === "signup" && <>
           <Input label="Nom complet" value={name} onChange={setName} placeholder="Votre nom" />
           <Input label="Téléphone"   value={phone} onChange={setPhone} placeholder="+216 XX XXX XXX" />
+          <div style={{ marginBottom:14 }}>
+            <div style={{ fontSize:11, color:T.textSub, fontWeight:600, textTransform:"uppercase", letterSpacing:1, marginBottom:5 }}>Type de compte</div>
+            <Pills options={ACCOUNT_TYPES.map(t => t.label)} value={ACCOUNT_TYPES.find(t => t.id === accountType)?.label}
+              onChange={label => setAccountType(ACCOUNT_TYPES.find(t => t.label === label).id)} />
+          </div>
         </>}
         <Input label="Email"       value={email} onChange={setEmail} placeholder="vous@email.com" type="email" />
         <Input label="Mot de passe" value={pass} onChange={setPass}  placeholder="••••••••"       type="password" />
