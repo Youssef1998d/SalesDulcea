@@ -4,21 +4,21 @@ import { OrgHeader } from "../../../components/layout/OrgHeader";
 import { BottomBar } from "../../../components/layout/BottomBar";
 import { Btn, EmptyState } from "../../../components/ui";
 import { supabase } from "../../../core/supabase";
-import { AgentsTab }  from "./AgentsTab";
+import { AgentsTab }   from "./AgentsTab";
 import { ProductsTab } from "./ProductsTab";
 import { OverviewTab } from "./OverviewTab";
 import { SalesTab }    from "./SalesTab";
 
 export function KAMApp({ user, onSignOut }) {
   const T = useTheme();
-  const [tab,          setTab]          = useState("agents");
-  const [agents,       setAgents]       = useState([]);
-  const [products,     setProducts]     = useState([]);
-  const [allVisits,    setAllVisits]    = useState([]);
-  const [allClients,   setAllClients]   = useState([]);
-  const [allSales,     setAllSales]     = useState([]);
-  const [agentProducts,setAP]          = useState([]);
-  const [loading,      setLoading]      = useState(false);
+  const [tab,           setTab]     = useState("agents");
+  const [agents,        setAgents]  = useState([]);
+  const [products,      setProducts]= useState([]);
+  const [allVisits,     setAllV]    = useState([]);
+  const [allClients,    setAllC]    = useState([]);
+  const [allSales,      setAllS]    = useState([]);
+  const [agentProducts, setAP]      = useState([]);
+  const [loading,       setLoading] = useState(false);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -30,29 +30,31 @@ export function KAMApp({ user, onSignOut }) {
       supabase.from("sales").select("*").order("created_at",{ascending:false}),
       supabase.from("agent_products").select("*"),
     ]);
-    setAgents(ag.data||[]); setProducts(pr.data||[]); setAllVisits(vi.data||[]);
-    setAllClients(cl.data||[]); setAllSales(sa.data||[]); setAP(ap.data||[]);
+    setAgents(ag.data||[]); setProducts(pr.data||[]); setAllV(vi.data||[]);
+    setAllC(cl.data||[]); setAllS(sa.data||[]); setAP(ap.data||[]);
     setLoading(false);
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
-  async function approve(id)  { await supabase.from("agents").update({status:"active"}).eq("id",id); loadAll(); }
-  async function reject(id)   { await supabase.from("agents").update({status:"rejected"}).eq("id",id); loadAll(); }
+  // ── Agent management ───────────────────────────────────────────────────────
+  async function approve(id)     { await supabase.from("agents").update({status:"active"}).eq("id",id); loadAll(); }
+  async function reject(id)      { await supabase.from("agents").update({status:"rejected"}).eq("id",id); loadAll(); }
   async function removeAgent(id) { if(!window.confirm("Supprimer ?"))return; await supabase.from("agents").delete().eq("id",id); loadAll(); }
 
+  // ── Product management ─────────────────────────────────────────────────────
   async function saveProduct(payload, existingId) {
     const p = { ...payload, active:true };
     if (existingId) await supabase.from("products").update(p).eq("id",existingId);
     else            await supabase.from("products").insert([p]);
     loadAll();
   }
-
   async function archiveProduct(id) {
     await supabase.from("products").update({active:false}).eq("id",id);
     loadAll();
   }
 
+  // ── Product assignment ─────────────────────────────────────────────────────
   async function toggleProduct(agentId, productId) {
     const ex = agentProducts.find(ap=>ap.agent_id===agentId&&ap.product_id===productId);
     if (ex) await supabase.from("agent_products").delete().eq("id",ex.id);
@@ -60,16 +62,12 @@ export function KAMApp({ user, onSignOut }) {
     loadAll();
   }
 
-  async function setCommission(agentId, productId, rate) {
-    const ex = agentProducts.find(ap=>ap.agent_id===agentId&&ap.product_id===productId);
-    if (!ex) return;
-    await supabase.from("agent_products").update({commission_rate:Number(rate)}).eq("id",ex.id);
-    loadAll();
-  }
+  // ── Per-sale commission override ───────────────────────────────────────────
+  // Called from SalesTab when KAM edits a single sale's commission
+  // AgentsTab handles bulk commission changes internally and calls onRefresh=loadAll
 
-  const pending = agents.filter(a=>a.status==="pending");
-
-  const kamTabs = [
+  const pending  = agents.filter(a=>a.status==="pending");
+  const kamTabs  = [
     { id:"agents",   icon:"👥", label:"Équipe",  badge:pending.length },
     { id:"products", icon:"📦", label:"Produits", badge:0 },
     { id:"overview", icon:"📊", label:"Overview", badge:0 },
@@ -83,10 +81,45 @@ export function KAMApp({ user, onSignOut }) {
       <div style={{ padding:"16px 16px 0" }}>
         {loading && <EmptyState icon="⚓" title="Chargement..." sub="Récupération des données" />}
 
-        {tab==="agents"   && !loading && <AgentsTab agents={agents} allVisits={allVisits} allClients={allClients} allSales={allSales} products={products} agentProducts={agentProducts} onApprove={approve} onReject={reject} onRemove={removeAgent} onToggleProduct={toggleProduct} onSetCommission={setCommission} />}
-        {tab==="products" && !loading && <ProductsTab products={products} agentProducts={agentProducts} onSave={saveProduct} onArchive={archiveProduct} />}
-        {tab==="overview" && !loading && <OverviewTab agents={agents} allVisits={allVisits} allClients={allClients} allSales={allSales} />}
-        {tab==="sales"    && !loading && <SalesTab allSales={allSales} products={products} agents={agents} />}
+        {tab==="agents" && !loading &&
+          <AgentsTab
+            agents={agents}
+            allVisits={allVisits}
+            allClients={allClients}
+            allSales={allSales}
+            products={products}
+            agentProducts={agentProducts}
+            onApprove={approve}
+            onReject={reject}
+            onRemove={removeAgent}
+            onToggleProduct={toggleProduct}
+            onRefresh={loadAll}
+          />
+        }
+        {tab==="products" && !loading &&
+          <ProductsTab
+            products={products}
+            agentProducts={agentProducts}
+            onSave={saveProduct}
+            onArchive={archiveProduct}
+          />
+        }
+        {tab==="overview" && !loading &&
+          <OverviewTab
+            agents={agents}
+            allVisits={allVisits}
+            allClients={allClients}
+            allSales={allSales}
+          />
+        }
+        {tab==="sales" && !loading &&
+          <SalesTab
+            allSales={allSales}
+            products={products}
+            agents={agents}
+            onRefresh={loadAll}
+          />
+        }
       </div>
 
       <BottomBar tabs={kamTabs} active={tab} onChange={setTab} />
