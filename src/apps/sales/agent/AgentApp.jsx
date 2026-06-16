@@ -7,11 +7,14 @@ import { useVisits }  from "../../../hooks/useVisits";
 import { useClients } from "../../../hooks/useClients";
 import { useProducts } from "../../../hooks/useProducts";
 import { useSales }   from "../../../hooks/useSales";
+import { useStock }   from "../../../hooks/useStock";
+import { useOrders }  from "../../../hooks/useOrders";
 import { emptyLine, calcFin, fmtS, daysUntil } from "../../../core/utils";
 import { LogTab }        from "./LogTab";
 import { FollowupTab }   from "./FollowupTab";
 import { ClientsTab }    from "./ClientsTab";
 import { StatsTab, NBATab } from "./StatsNBATab";
+import { BrowseTab, OrdersTab } from "../../stock";
 
 const OUTCOMES = ["Vendu","Intéressé","Revenir","Refus"];
 const CONTACTS = ["Propriétaire","Manager","Employé"];
@@ -23,6 +26,8 @@ export function AgentApp({ user, agent, onSignOut }) {
   const { clients, loading:cLoad, load:loadClients, save:saveClient, remove:removeClient, recordReorder } = useClients(user.id);
   const { products, loadAssigned } = useProducts(user.id);
   const { insertFromVisit } = useSales();
+  const { stock,  loading:stLoad, load:loadStock }  = useStock(agent.org_id);
+  const { orders, loading:orLoad, load:loadOrders, placeOrder } = useOrders({ agentId:user.id, orgId:agent.org_id });
 
   const [tab,    setTab]    = useState("log");
   const [form,   setForm]   = useState(null);
@@ -33,6 +38,8 @@ export function AgentApp({ user, agent, onSignOut }) {
     loadAssigned().then(() => {});
     loadVisits();
     loadClients();
+    loadStock();
+    loadOrders();
   }, []);
 
   // Once products load, init form
@@ -85,6 +92,8 @@ export function AgentApp({ user, agent, onSignOut }) {
     { id:"clients",  icon:"👥", label:"Clients",  badge:0 },
     { id:"dash",     icon:"📊", label:"Stats",    badge:0 },
     { id:"nba",      icon:"🎯", label:"Action",   badge:0 },
+    { id:"stock",    icon:"📦", label:"Stock",    badge:0 },
+    { id:"orders",   icon:"🧾", label:"Commandes",badge:0 },
   ];
 
   if (!form) return (
@@ -103,6 +112,8 @@ export function AgentApp({ user, agent, onSignOut }) {
         {tab==="clients"  && <ClientsTab clients={clients} loading={cLoad} onSave={saveClient} onDelete={removeClient} onReorder={handleReorder} />}
         {tab==="dash"     && <StatsTab visits={visits} sold={sold} convRate={convRate} tGross={tGross} tInv={tInv} tBoxes={tBoxes} todayVisits={todayV} todaySales={todayS} products={products} />}
         {tab==="nba"      && <NBATab total={total} urgentClients={[]} followups={followups} convRate={convRate} tInv={tInv} tGross={tGross} fmtS={fmtS} />}
+        {tab==="stock"    && <BrowseTab stock={stock} loading={stLoad} onPlaceOrder={async lines => { await placeOrder(lines); await loadStock(); }} />}
+        {tab==="orders"   && <OrdersTab orders={orders} loading={orLoad} />}
       </div>
 
       <BottomBar tabs={tabs} active={tab} onChange={setTab} />

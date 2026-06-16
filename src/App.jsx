@@ -4,6 +4,7 @@ import { useAuth } from "./hooks/useAuth";
 import { AuthScreen }   from "./platform/AuthScreen";
 import { PendingScreen } from "./platform/PendingScreen";
 import { AgentApp, KAMApp } from "./apps/sales";
+import { StockManagerApp } from "./apps/stock";
 
 // ─── Loading Splash ───────────────────────────────────────────────────────────
 function LoadingScreen() {
@@ -47,6 +48,11 @@ export default function App() {
       {/* Agent app */}
       {user && agent && agent.status === "active" && agent.role === "agent" && (
         <AgentApp user={user} agent={agent} onSignOut={logout} />
+      )}
+
+      {/* Stock manager dashboard */}
+      {user && agent && agent.status === "active" && agent.role === "stock_manager" && (
+        <StockManagerApp user={user} agent={agent} onSignOut={logout} />
       )}
     </ThemeContext.Provider>
   );
