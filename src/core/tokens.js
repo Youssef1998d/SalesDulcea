@@ -92,5 +92,9 @@ style.textContent = `
 
   /* Smooth tab content transitions */
   .eb-tab-content { animation: fadeUp 0.18s ease forwards; }
+
+  /* Hide scrollbar (used by the horizontally-scrollable bottom tab bar) */
+  .eb-noscroll { scrollbar-width: none; -ms-overflow-style: none; }
+  .eb-noscroll::-webkit-scrollbar { display: none; }
 `;
 document.head.appendChild(style);

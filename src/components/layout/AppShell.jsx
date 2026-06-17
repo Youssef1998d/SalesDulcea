@@ -72,14 +72,10 @@ export function AppShell({
       />
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         <OrgHeader compact />
-        <div
-          style={{
-            flex: 1, overflowY: "auto",
-            padding: "28px 32px",
-          }}
-          className="eb-tab-content"
-        >
-          {children}
+        <div style={{ flex: 1, overflowY: "auto" }}>
+          <div style={{ maxWidth: 1100, margin: "0 auto", padding: "28px 32px" }} className="eb-tab-content">
+            {children}
+          </div>
         </div>
       </div>
     </div>

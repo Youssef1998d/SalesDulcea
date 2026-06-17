@@ -8,7 +8,7 @@ export function BottomBar({ tabs, active, onChange }) {
   const many = tabs.length > 5;
 
   return (
-    <div style={{
+    <div className={many ? "eb-noscroll" : undefined} style={{
       position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
       width: "100%", maxWidth: 480,
       background: T.surface,

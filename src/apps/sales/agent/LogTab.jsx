@@ -110,8 +110,8 @@ export function LogTab({ form, setForm, products, onSubmit, saving, saved, visit
                   )}
                 </div>
 
-                {/* Quantities — two inputs side by side */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                {/* Quantities — compact fields (not stretched edge to edge) */}
+                <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
                   {[["Boxes", "boxes"], ["Pots offerts 🎁", "freePots"]].map(([lbl, key]) => (
                     <div key={key} style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 10, color: T.textDim, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>{lbl}</div>
@@ -120,7 +120,7 @@ export function LogTab({ form, setForm, products, onSubmit, saving, saved, visit
                         value={line[key]}
                         onChange={e => updLine(line.id, key, e.target.value)}
                         style={{
-                          width: "100%", minWidth: 0, background: T.surfaceHi,
+                          width: 96, minWidth: 0, background: T.surfaceHi,
                           border: `1px solid ${T.border}`, borderRadius: 8,
                           padding: "9px 10px", color: T.text, fontSize: 15,
                           fontWeight: 600, outline: "none", textAlign: "center",
