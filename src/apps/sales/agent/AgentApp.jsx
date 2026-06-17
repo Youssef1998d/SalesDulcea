@@ -14,6 +14,7 @@ import { FollowupTab }   from "./FollowupTab";
 import { ClientsTab }    from "./ClientsTab";
 import { StatsTab, NBATab } from "./StatsNBATab";
 import { BrowseTab, OrdersTab, StockBatchesTab, ManagerOrdersTab } from "../../stock";
+import { InvoicingTab } from "../../invoicing";
 import { supabase } from "../../../core/supabase";
 
 const OUTCOMES = ["Vendu", "Intéressé", "Revenir", "Refus"];
@@ -40,6 +41,14 @@ export function AgentApp({ user, agent, onSignOut, onThemeToggle, themeMode }) {
   const [saving,      setSaving]   = useState(false);
   const [saved,       setSaved]    = useState(false);
   const [allProducts, setAllProducts] = useState([]);
+  const [pendingInvoiceOrder, setPendingInvoiceOrder] = useState(null);
+
+  const org = agent.organizations || null;
+
+  function goInvoiceFromOrder(order) {
+    setPendingInvoiceOrder(order);
+    setTab("invoices");
+  }
 
   useEffect(() => {
     loadAssigned().then(() => {});
@@ -112,6 +121,7 @@ export function AgentApp({ user, agent, onSignOut, onThemeToggle, themeMode }) {
     { id: "log",      icon: "📋", label: "Log",      badge: 0 },
     { id: "followup", icon: "🔁", label: "Relances",  badge: followups.length },
     { id: "clients",  icon: "👥", label: "Clients",   badge: 0 },
+    { id: "invoices", icon: "🧾", label: "Factures",  badge: 0 },
     { id: "dash",     icon: "📊", label: "Stats",     badge: 0 },
     ...(canOrder ? [
       { id: "stock",  icon: "📦", label: "Stock",     badge: 0 },
@@ -183,7 +193,20 @@ export function AgentApp({ user, agent, onSignOut, onThemeToggle, themeMode }) {
         />
       )}
       {tab === "orders" && canOrder && (
-        <OrdersTab orders={orders} loading={orLoad} />
+        <OrdersTab orders={orders} loading={orLoad} onGenerateInvoice={goInvoiceFromOrder} />
+      )}
+      {tab === "invoices" && (
+        <InvoicingTab
+          role="agent"
+          orgId={agent.org_id}
+          agentId={user.id}
+          org={org}
+          clients={clients}
+          products={products}
+          orders={orders}
+          pendingOrder={pendingInvoiceOrder}
+          onConsumePending={() => setPendingInvoiceOrder(null)}
+        />
       )}
       {tab === "manage-stock" && canManage && (
         <StockBatchesTab

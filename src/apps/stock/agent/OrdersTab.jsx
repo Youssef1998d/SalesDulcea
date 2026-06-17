@@ -1,5 +1,5 @@
 import { useTheme } from "../../../core/theme";
-import { Badge, SectionTitle, EmptyState, SkeletonList } from "../../../components/ui";
+import { Badge, Btn, SectionTitle, EmptyState, SkeletonList } from "../../../components/ui";
 
 const STATUS_CONFIG = {
   pending:   { color: "warning", label: "En attente",  icon: "⏳" },
@@ -8,7 +8,7 @@ const STATUS_CONFIG = {
   rejected:  { color: "danger",  label: "Refusée",     icon: "✕" },
 };
 
-export function OrdersTab({ orders, loading }) {
+export function OrdersTab({ orders, loading, onGenerateInvoice }) {
   const T = useTheme();
 
   if (loading) return <SkeletonList count={3} height={90} />;
@@ -67,7 +67,10 @@ export function OrdersTab({ orders, loading }) {
             </div>
 
             {/* Total quantity */}
-            <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
+            <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              {o.status === "delivered" && onGenerateInvoice ? (
+                <Btn size="sm" onClick={() => onGenerateInvoice(o)}>🧾 Générer une facture</Btn>
+              ) : <span />}
               <div style={{ fontSize: 12, color: T.textDim }}>
                 Total: <span style={{ color: T.text, fontWeight: 600 }}>
                   {(o.order_lines || []).reduce((s, l) => s + Number(l.quantity_confirmed ?? l.quantity_requested), 0)} unités

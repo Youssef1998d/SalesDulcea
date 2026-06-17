@@ -6,6 +6,7 @@ import { AgentsTab }   from "./AgentsTab";
 import { ProductsTab } from "./ProductsTab";
 import { OverviewTab } from "./OverviewTab";
 import { SalesTab }    from "./SalesTab";
+import { InvoicingTab, CompanySettings } from "../../invoicing";
 
 export function KAMApp({ user, onSignOut, agent, onThemeToggle, themeMode }) {
   const [tab,           setTab]     = useState("overview");
@@ -16,6 +17,8 @@ export function KAMApp({ user, onSignOut, agent, onThemeToggle, themeMode }) {
   const [allSales,      setAllS]    = useState([]);
   const [agentProducts, setAP]      = useState([]);
   const [loading,       setLoading] = useState(false);
+  const [org,           setOrg]     = useState(agent?.organizations || null);
+  const [settingsOpen,  setSettingsOpen] = useState(false);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -76,6 +79,7 @@ export function KAMApp({ user, onSignOut, agent, onThemeToggle, themeMode }) {
     { id: "agents",    icon: "👥", label: "Équipe",   badge: pending.length },
     { id: "products",  icon: "📦", label: "Produits", badge: 0 },
     { id: "sales",     icon: "💰", label: "Ventes",   badge: 0 },
+    { id: "invoices",  icon: "🧾", label: "Factures", badge: 0 },
   ];
 
   return (
@@ -131,6 +135,24 @@ export function KAMApp({ user, onSignOut, agent, onThemeToggle, themeMode }) {
           onRefresh={loadAll}
         />
       )}
+      {!loading && tab === "invoices" && (
+        <InvoicingTab
+          role={agent?.role || "kam"}
+          orgId={agent?.org_id}
+          agentId={user.id}
+          org={org}
+          clients={allClients}
+          products={products}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+      )}
+
+      <CompanySettings
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        org={org}
+        onSaved={setOrg}
+      />
     </AppShell>
   );
 }

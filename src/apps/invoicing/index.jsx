@@ -1,5 +1,10 @@
 import { useTheme } from "../../core/theme";
-import { EmptyState } from "../components/ui";
+import { EmptyState } from "../../components/ui";
+
+export { InvoicingTab } from "./InvoicingTab";
+export { GenerateInvoiceModal } from "./GenerateInvoiceModal";
+export { InvoiceDetailScreen } from "./InvoiceDetailScreen";
+export { CompanySettings } from "./CompanySettings";
 
 // Coming soon — shares theme engine, auth, and component library
 export function ComingSoonApp({ name }) {
