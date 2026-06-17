@@ -29,21 +29,26 @@ export function TrackingScanner({ open, onClose, org, onResolveQr, onGeneratePo 
 
   const scannerRef = useRef(null);
   const hostRef    = useRef(null); // React-owned wrapper; the scanner's div is appended imperatively
+  const handledRef = useRef(false); // ignore repeat decodes while resolving
 
+  // Resolve a token. On success we set the order, which triggers the effect
+  // cleanup to stop the camera (the single place stop() is called).
   async function handleToken(token) {
     const t = String(token || "").trim();
     if (!t) return;
-    // Stop the camera before resolving / showing the result.
-    const inst = scannerRef.current;
-    if (inst) { try { await inst.stop(); } catch { /* not running */ } }
+    handledRef.current = true;
     setError(null);
     try {
       const o = await resolveRef.current(t);
-      if (o) { setOrder(o); }
-      else   { setError("Commande introuvable pour ce code."); setCamState("error"); }
+      if (o) {
+        setOrder(o);
+      } else {
+        setError("Commande introuvable pour ce code.");
+        handledRef.current = false; // let them scan again (camera still running)
+      }
     } catch (e) {
       setError(e?.message || "Erreur lors de la recherche.");
-      setCamState("error");
+      handledRef.current = false;
     }
   }
 
@@ -61,11 +66,12 @@ export function TrackingScanner({ open, onClose, org, onResolveQr, onGeneratePo 
 
     const h = new Html5Qrcode(READER_ID);
     scannerRef.current = h;
+    handledRef.current = false;
     setCamState("starting");
     setError(null);
 
     const config = { fps: 10, qrbox: { width: 220, height: 220 } };
-    const onDecode = decoded => { if (!cancelled) handleToken(decoded); };
+    const onDecode = decoded => { if (!cancelled && !handledRef.current) handleToken(decoded); };
 
     // Prefer a real back-camera device id (most reliable on Android Chrome),
     // then fall back to facingMode strings accepted by html5-qrcode.
@@ -99,19 +105,22 @@ export function TrackingScanner({ open, onClose, org, onResolveQr, onGeneratePo 
     return () => {
       cancelled = true;
       const inst = scannerRef.current;
+      scannerRef.current = null;
       const cleanupEl = () => {
         try { inst && inst.clear(); } catch { /* noop */ }
         try { if (el && el.parentNode) el.parentNode.removeChild(el); } catch { /* noop */ }
       };
-      if (inst) {
-        Promise.resolve(inst.stop()).catch(() => {}).finally(cleanupEl);
-      } else {
-        cleanupEl();
-      }
+      // stop() throws synchronously if the scanner isn't running — guard both
+      // the sync throw and the async rejection.
+      try {
+        const p = inst && inst.stop();
+        if (p && typeof p.then === "function") p.then(() => {}, () => {}).finally(cleanupEl);
+        else cleanupEl();
+      } catch { cleanupEl(); }
     };
   }, [open, order, attempt]); // eslint-disable-line
 
-  function rescan() { setOrder(null); setError(null); setManual(""); setAttempt(a => a + 1); }
+  function rescan() { handledRef.current = false; setOrder(null); setError(null); setManual(""); setAttempt(a => a + 1); }
 
   async function openPo() {
     setBusyPo(true);
