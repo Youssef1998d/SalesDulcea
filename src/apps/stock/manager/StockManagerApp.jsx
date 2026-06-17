@@ -11,7 +11,7 @@ export function StockManagerApp({ user, agent, onSignOut, onThemeToggle, themeMo
   const [products, setProducts] = useState([]);
 
   const { stock,  loading: sLoad, load: loadStock,  addBatch, updateBatch, removeBatch } = useStock(agent.org_id);
-  const { orders, loading: oLoad, load: loadOrders, confirmOrder, rejectOrder, markDelivered } = useOrders({ orgId: agent.org_id });
+  const { orders, loading: oLoad, load: loadOrders, confirmOrder, rejectOrder, markShipped, markDelivered } = useOrders({ orgId: agent.org_id });
 
   useEffect(() => {
     loadStock();
@@ -48,6 +48,7 @@ export function StockManagerApp({ user, agent, onSignOut, onThemeToggle, themeMo
           loading={oLoad}
           onConfirm={handleConfirm}
           onReject={id => rejectOrder(id, user.id)}
+          onShip={markShipped}
           onDeliver={markDelivered}
         />
       )}

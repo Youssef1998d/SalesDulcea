@@ -6,15 +6,11 @@ import { INVOICE_STATUS, fmtMoneyDT, fmtDateFr } from "../../core/invoiceConstan
 import { GenerateInvoiceModal } from "./GenerateInvoiceModal";
 import { InvoiceDetailScreen } from "./InvoiceDetailScreen";
 
-// Invoicing hub. Used as the "Factures" tab by both agent and manager apps.
-//   role     : 'agent' | 'kam' | 'superadmin'
-//   orders   : agent's own orders — every facture is tied to an order
-//   pendingOrder        : an order routed in to auto-open generation (recovery)
-//   pendingDetailInvoice: a freshly created invoice to open directly (after ordering)
+// Invoicing hub. Agent: generate (from POs) + own list. Manager: all + cancel/regenerate.
+//   orders : agent's own orders (to offer invoiceable POs). A PO can be billed
+//            once confirmed or delivered, and only if not already invoiced.
 export function InvoicingTab({
-  role, orgId, agentId, org, clients = [], products = [],
-  orders = [], pendingOrder = null, onConsumePending,
-  pendingDetailInvoice = null, onConsumeDetail, onOpenSettings,
+  role, orgId, agentId, org, clients = [], orders = [], onOpenSettings,
 }) {
   const T = useTheme();
   const isAgent = role === "agent";
@@ -22,36 +18,13 @@ export function InvoicingTab({
   const { invoices, loading, load, createInvoice, regeneratePdf, recordPayment, cancelInvoice } =
     useInvoices({ orgId, agentId: isAgent ? agentId : null });
 
-  const [genOpen,   setGenOpen]   = useState(false);
-  const [genOrder,  setGenOrder]  = useState(null);
-  const [detail,    setDetail]    = useState(null);
+  const [genOpen, setGenOpen] = useState(false);
+  const [detail,  setDetail]  = useState(null);
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto-open generation when routed in from the Orders tab (recovery path)
-  useEffect(() => {
-    if (pendingOrder) {
-      setGenOrder(pendingOrder);
-      setGenOpen(true);
-      onConsumePending?.();
-    }
-  }, [pendingOrder]);
-
-  // Open a just-created invoice's preview directly (after placing an order)
-  useEffect(() => {
-    if (pendingDetailInvoice) {
-      setDetail(pendingDetailInvoice);
-      load();
-      onConsumeDetail?.();
-    }
-  }, [pendingDetailInvoice]);
-
-  const invoicedOrderIds = new Set(
-    invoices.filter(i => i.order_id && i.status !== "cancelled").map(i => i.order_id)
-  );
-  // Orders with no active facture yet (legacy orders, or a failed auto-generation)
-  const ordersToInvoice = isAgent
-    ? orders.filter(o => o.status !== "rejected" && !invoicedOrderIds.has(o.id))
+  const invoiceableOrders = isAgent
+    ? orders.filter(o => ["confirmed", "delivered"].includes(o.status) && !o.invoice_id)
     : [];
 
   async function handleGenerate(payload) {
@@ -59,13 +32,21 @@ export function InvoicingTab({
     setDetail(created);
   }
 
-  function openGenerate(order) {
-    setGenOrder(order);
-    setGenOpen(true);
-  }
-
   return (
     <div>
+      {isAgent && (
+        <Btn style={{ width: "100%", marginBottom: 4 }} onClick={() => setGenOpen(true)} disabled={!invoiceableOrders.length}>
+          + Générer une facture
+        </Btn>
+      )}
+      {isAgent && (
+        <div style={{ fontSize: 12, color: T.textDim, textAlign: "center", marginBottom: 16 }}>
+          {invoiceableOrders.length
+            ? `${invoiceableOrders.length} commande(s) facturable(s) · regroupez les commandes d'un même client`
+            : "Aucune commande facturable (confirmée ou livrée) pour le moment"}
+        </div>
+      )}
+
       {!isAgent && onOpenSettings && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
           <Btn variant="subtle" size="sm" onClick={onOpenSettings}>⚙ Paramètres société</Btn>
@@ -81,43 +62,17 @@ export function InvoicingTab({
         </div>
       )}
 
-      {/* Orders still without a facture (recovery for legacy/failed orders) */}
-      {ordersToInvoice.length > 0 && (
-        <>
-          <SectionTitle>Commandes sans facture · {ordersToInvoice.length}</SectionTitle>
-          {ordersToInvoice.map(o => (
-            <div key={o.id} style={{
-              background: T.surface, border: `1px solid ${T.border}`,
-              borderLeft: `3px solid ${T.warning}`,
-              borderRadius: 14, padding: "13px 15px", marginBottom: 9, boxShadow: T.shadow,
-              display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,
-            }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>
-                  Commande du {new Date(o.created_at).toLocaleDateString("fr-FR")}
-                  {o.clients?.name ? ` · ${o.clients.name}` : ""}
-                </div>
-                <div style={{ fontSize: 12, color: T.textDim }}>
-                  {(o.order_lines || []).length} produit(s)
-                </div>
-              </div>
-              <Btn size="sm" onClick={() => openGenerate(o)}>Générer une facture</Btn>
-            </div>
-          ))}
-        </>
-      )}
-
-      {/* Invoice list */}
       <SectionTitle>{isAgent ? "Mes factures" : "Toutes les factures"} · {invoices.length}</SectionTitle>
 
       {loading && <SkeletonList count={3} height={76} />}
       {!loading && invoices.length === 0 && (
         <EmptyState icon="🧾" title="Aucune facture"
-          sub={isAgent ? "Passez une commande depuis l'onglet Stock — sa facture sera générée automatiquement" : "Les factures créées par les agents apparaîtront ici"} />
+          sub={isAgent ? "Sélectionnez des commandes confirmées/livrées d'un même client pour les facturer" : "Les factures créées par les agents apparaîtront ici"} />
       )}
 
       {invoices.map(inv => {
         const st = INVOICE_STATUS[inv.status] || INVOICE_STATUS.issued;
+        const poCount = (inv.purchase_orders || []).length;
         return (
           <div key={inv.id} className="eb-card"
             onClick={() => setDetail(inv)}
@@ -140,7 +95,9 @@ export function InvoicingTab({
               </div>
               <div style={{ fontSize: 13, color: T.gold, fontWeight: 700 }}>{fmtMoneyDT(inv.total_amount)}</div>
             </div>
-            <div style={{ fontSize: 11, color: T.textDim, marginTop: 3 }}>{fmtDateFr(inv.issue_date)}</div>
+            <div style={{ fontSize: 11, color: T.textDim, marginTop: 3 }}>
+              {fmtDateFr(inv.issue_date)}{poCount ? ` · ${poCount} bon(s) de commande` : ""}
+            </div>
           </div>
         );
       })}
@@ -148,11 +105,10 @@ export function InvoicingTab({
       {/* Overlays */}
       <GenerateInvoiceModal
         open={genOpen}
-        onClose={() => { setGenOpen(false); setGenOrder(null); }}
+        onClose={() => setGenOpen(false)}
         clients={clients}
-        products={products}
+        orders={invoiceableOrders}
         org={org}
-        order={genOrder}
         onGenerate={handleGenerate}
       />
 

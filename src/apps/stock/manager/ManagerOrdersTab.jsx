@@ -6,7 +6,7 @@ import { useIsMobile } from "../../../hooks/useIsMobile";
 const STATUS_COLOR = { pending: "warning", confirmed: "info", delivered: "success", rejected: "danger" };
 const STATUS_LABEL = { pending: "En attente", confirmed: "Confirmée", delivered: "Livrée", rejected: "Refusée" };
 
-export function ManagerOrdersTab({ orders, stock, loading, onConfirm, onReject, onDeliver }) {
+export function ManagerOrdersTab({ orders, stock, loading, onConfirm, onReject, onShip, onDeliver }) {
   const T      = useTheme();
   const mobile = useIsMobile();
   const [alloc, setAlloc] = useState({});
@@ -32,7 +32,8 @@ export function ManagerOrdersTab({ orders, stock, loading, onConfirm, onReject, 
 
   const pending   = orders.filter(o => o.status === "pending");
   const confirmed = orders.filter(o => o.status === "confirmed");
-  const rest      = orders.filter(o => o.status !== "pending" && o.status !== "confirmed");
+  const shipped   = orders.filter(o => o.status === "shipped");
+  const rest      = orders.filter(o => !["pending", "confirmed", "shipped"].includes(o.status));
 
   if (loading) return <SkeletonList count={3} height={100} />;
 
@@ -142,6 +143,38 @@ export function ManagerOrdersTab({ orders, stock, loading, onConfirm, onReject, 
                   <div style={{ fontSize: 12, color: T.textDim }}>{o.agents?.full_name ? `${o.agents.full_name} · ` : ""}{new Date(o.created_at).toLocaleDateString("fr-FR")}</div>
                 </div>
                 <Badge color={T.info}>Confirmée</Badge>
+              </div>
+              {(o.order_lines || []).map(l => (
+                <div key={l.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: T.textSub, padding: "3px 0" }}>
+                  <span>{l.products?.name}</span>
+                  <span>{l.quantity_confirmed ?? l.quantity_requested} {l.unit}</span>
+                </div>
+              ))}
+              <div style={{ marginTop: 10 }}>
+                <Btn size="sm" onClick={() => onShip(o.id)}>🚚 Marquer expédiée</Btn>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* Shipped — en route, awaiting delivery */}
+      {shipped.length > 0 && (
+        <>
+          <SectionTitle>Expédiées · {shipped.length}</SectionTitle>
+          {shipped.map(o => (
+            <div key={o.id} style={{
+              background: T.surface, border: `1px solid ${T.border}`,
+              borderLeft: `3px solid ${T.info}`,
+              borderRadius: 14, padding: "14px 16px", marginBottom: 9,
+              boxShadow: T.shadow,
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{o.clients?.name || "Client —"}</div>
+                  <div style={{ fontSize: 12, color: T.textDim }}>{o.agents?.full_name ? `${o.agents.full_name} · ` : ""}{o.po_number || ""}</div>
+                </div>
+                <Badge color={T.info}>Expédiée</Badge>
               </div>
               {(o.order_lines || []).map(l => (
                 <div key={l.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: T.textSub, padding: "3px 0" }}>

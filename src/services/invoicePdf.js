@@ -1,5 +1,6 @@
 import { jsPDF } from "jspdf";
 import { fmtMoney, fmtDateFr } from "../core/invoiceConstants";
+import { qrDataUrl } from "./qr";
 
 // ─── Image helpers ────────────────────────────────────────────────────────────
 // Load a remote image (logo / stamp) into a base64 data URL + natural size so it
@@ -46,7 +47,7 @@ function fitBox(img, maxW, maxH) {
 //   lines   : [{ product_name, quantity, unit_price, line_total }]
 //   org     : organization row (company_name, address, phone, email,
 //             tax_identification_number, logo_url, stamp_url)
-export async function buildInvoicePdf(invoice, lines, org) {
+export async function buildInvoicePdf(invoice, lines, org, poTokens = []) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const PW = 210;            // page width
   const M  = 16;             // margin
@@ -187,8 +188,23 @@ export async function buildInvoicePdf(invoice, lines, org) {
   y += 3;
   totalRow("Total TTC", `${fmtMoney(invoice.total_amount)} DT`, true, accent);
 
+  // ── Associated purchase orders (QR codes track each PO's cycle) ─────────────
+  const footerY = Math.max(y + 10, 236);
+  const pos = (poTokens || []).filter(p => p?.qr_token).slice(0, 4);
+  if (pos.length) {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(gold);
+    doc.text("BONS DE COMMANDE", M, footerY - 4);
+    const qrs = await Promise.all(pos.map(p => qrDataUrl(p.qr_token, 140)));
+    qrs.forEach((q, i) => {
+      const x = M + i * 24;
+      if (q) doc.addImage(q, "PNG", x, footerY, 20, 20);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(6); doc.setTextColor(grey);
+      doc.text(String(pos[i].po_number || ""), x, footerY + 23);
+    });
+  }
+
   // ── Footer: stamp ───────────────────────────────────────────────────────────
-  y = Math.max(y + 10, 240);
+  y = footerY;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9.5);
   doc.setTextColor(grey);

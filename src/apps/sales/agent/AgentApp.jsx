@@ -15,7 +15,6 @@ import { ClientsTab }    from "./ClientsTab";
 import { StatsTab, NBATab } from "./StatsNBATab";
 import { BrowseTab, OrdersTab, StockBatchesTab, ManagerOrdersTab } from "../../stock";
 import { InvoicingTab } from "../../invoicing";
-import { useInvoices } from "../../../hooks/useInvoices";
 import { supabase } from "../../../core/supabase";
 
 const OUTCOMES = ["Vendu", "Intéressé", "Revenir", "Refus"];
@@ -34,49 +33,24 @@ export function AgentApp({ user, agent, onSignOut, onThemeToggle, themeMode }) {
   const canManage = perms.includes("stock_management");
 
   const { stock, loading: stLoad, load: loadStock, addBatch, updateBatch, removeBatch } = useStock(agent.org_id);
-  const { orders, loading: orLoad, load: loadOrders, placeOrder, deleteOrder } = useOrders({ agentId: user.id, orgId: agent.org_id });
-  const { orders: allOrders, loading: allOrLoad, load: loadAllOrders, confirmOrder, rejectOrder, markDelivered } = useOrders({ orgId: agent.org_id });
-  const { createInvoice } = useInvoices({ orgId: agent.org_id, agentId: user.id });
+  const { orders, loading: orLoad, load: loadOrders, placeOrder, cancelOrder, generatePoDocument, findByQrToken } = useOrders({ agentId: user.id, orgId: agent.org_id });
+  const { orders: allOrders, loading: allOrLoad, load: loadAllOrders, confirmOrder, rejectOrder, markShipped, markDelivered } = useOrders({ orgId: agent.org_id });
 
   const [tab,         setTab]      = useState("log");
   const [form,        setForm]     = useState(null);
   const [saving,      setSaving]   = useState(false);
   const [saved,       setSaved]    = useState(false);
   const [allProducts, setAllProducts] = useState([]);
-  const [pendingInvoiceOrder,  setPendingInvoiceOrder]  = useState(null);
-  const [pendingDetailInvoice, setPendingDetailInvoice] = useState(null);
 
   const org = agent.organizations || null;
 
-  // Placing an order requires a client and atomically generates its facture.
-  // If invoice generation fails, the order is rolled back so no order exists
-  // without a facture.
+  // Place an order for a client. Invoicing is deferred — the order gets a PO
+  // number + QR; the facture is generated later from one or more POs.
   async function handlePlaceOrder({ clientId, lines }) {
     const client = clients.find(c => c.id === clientId);
     if (!client) throw new Error("Veuillez sélectionner un client.");
-    if (!org?.stamp_url)
-      throw new Error("Impossible de générer la facture. Veuillez configurer le cachet de l'entreprise.");
-
-    const order = await placeOrder(clientId, lines);
-    try {
-      const invoiceLines = lines.map(l => {
-        const p = products.find(p => p.id === l.productId);
-        return {
-          product_id:   l.productId,
-          product_name: p?.name || "Produit",
-          quantity:     Number(l.quantity),
-          unit_price:   Number(p?.price || 0),
-        };
-      });
-      const invoice = await createInvoice({ org, client, lines: invoiceLines, orderId: order.id, order, createdBy: user.id });
-      await loadStock();
-      // Redirect to the invoice preview
-      setPendingDetailInvoice(invoice);
-      setTab("invoices");
-    } catch (e) {
-      await deleteOrder(order.id);
-      throw e;
-    }
+    await placeOrder(clientId, lines);
+    await loadStock();
   }
 
   useEffect(() => {
@@ -222,7 +196,12 @@ export function AgentApp({ user, agent, onSignOut, onThemeToggle, themeMode }) {
         />
       )}
       {tab === "orders" && canOrder && (
-        <OrdersTab orders={orders} loading={orLoad} />
+        <OrdersTab
+          orders={orders} loading={orLoad} org={org}
+          onGeneratePo={generatePoDocument}
+          onCancelOrder={cancelOrder}
+          onResolveQr={findByQrToken}
+        />
       )}
       {tab === "invoices" && (
         <InvoicingTab
@@ -231,12 +210,7 @@ export function AgentApp({ user, agent, onSignOut, onThemeToggle, themeMode }) {
           agentId={user.id}
           org={org}
           clients={clients}
-          products={products}
           orders={orders}
-          pendingOrder={pendingInvoiceOrder}
-          onConsumePending={() => setPendingInvoiceOrder(null)}
-          pendingDetailInvoice={pendingDetailInvoice}
-          onConsumeDetail={() => setPendingDetailInvoice(null)}
         />
       )}
       {tab === "manage-stock" && canManage && (
@@ -250,6 +224,7 @@ export function AgentApp({ user, agent, onSignOut, onThemeToggle, themeMode }) {
           orders={allOrders} stock={stock} loading={allOrLoad}
           onConfirm={async (orderId, lines) => { await confirmOrder(orderId, lines, user.id); await loadStock(); }}
           onReject={id => rejectOrder(id, user.id)}
+          onShip={markShipped}
           onDeliver={markDelivered}
         />
       )}

@@ -16,7 +16,7 @@ export function useInvoices({ orgId = null, agentId = null } = {}) {
     setLoading(true);
     let q = supabase
       .from("invoices")
-      .select("*, invoice_lines(*), clients(name), agents!invoices_created_by_fkey(full_name)")
+      .select("*, invoice_lines(*), clients(name), agents!invoices_created_by_fkey(full_name), purchase_orders:orders!orders_invoice_id_fkey(id, po_number, qr_token, status)")
       .eq("organization_id", orgId)
       .order("created_at", { ascending: false });
     if (agentId) q = q.eq("created_by", agentId);
@@ -37,38 +37,37 @@ export function useInvoices({ orgId = null, agentId = null } = {}) {
   }
 
   // ── Full generation workflow ───────────────────────────────────────────────
-  // params: { org, client, lines:[{product_id, product_name, quantity, unit_price}],
-  //           orderId?, order?, taxRate?, createdBy }
-  async function createInvoice({ org, client, lines, orderId = null, order = null, taxRate = null, createdBy }) {
+  // An invoice aggregates one or more purchase orders that share the same client
+  // and agent. params: { org, client, orders:[order with order_lines+products],
+  //                       taxRate?, createdBy }
+  async function createInvoice({ org, client, orders, taxRate = null, createdBy }) {
     // 1. Validate ----------------------------------------------------------------
-    if (!client)                                     throw new Error("Aucun client sélectionné.");
-    if (!lines || lines.length === 0)                throw new Error("Aucun produit sur la facture.");
-    if (!org?.stamp_url)                             throw new Error(STAMP_MISSING_MSG);
+    if (!client)                       throw new Error("Aucun client sélectionné.");
+    if (!orders || orders.length === 0) throw new Error("Aucune commande sélectionnée.");
+    if (!org?.stamp_url)               throw new Error(STAMP_MISSING_MSG);
 
-    // Prevent duplicate invoice for the same order
-    if (orderId) {
-      const { data: existing } = await supabase
-        .from("invoices")
-        .select("id")
-        .eq("order_id", orderId)
-        .neq("status", "cancelled")
-        .limit(1);
-      if (existing && existing.length > 0)
-        throw new Error("Une facture existe déjà pour cette commande.");
-    }
+    const sameClient = orders.every(o => o.client_id === orders[0].client_id);
+    const sameAgent  = orders.every(o => o.agent_id  === orders[0].agent_id);
+    if (!sameClient || !sameAgent)
+      throw new Error("Les commandes doivent avoir le même client et le même agent.");
+    if (orders.some(o => o.invoice_id))
+      throw new Error("Une commande sélectionnée est déjà facturée.");
 
-    // 2. Totals ------------------------------------------------------------------
-    const normalized = lines
-      .map(l => ({
-        product_id:   l.product_id || null,
-        product_name: l.product_name,
-        quantity:     Number(l.quantity),
-        unit_price:   Number(l.unit_price),
-        line_total:   Number(l.quantity) * Number(l.unit_price),
-      }))
-      .filter(l => l.quantity > 0);
-
-    if (normalized.length === 0) throw new Error("Aucun produit sur la facture.");
+    // 2. Aggregate lines from every PO (snapshot product name + unit price) ------
+    const normalized = [];
+    orders.forEach(o => {
+      (o.order_lines || []).forEach(l => {
+        const qty = Number(l.quantity_confirmed ?? l.quantity_requested);
+        if (qty > 0) normalized.push({
+          product_id:   l.product_id || null,
+          product_name: l.products?.name || "Produit",
+          quantity:     qty,
+          unit_price:   Number(l.products?.price || 0),
+          line_total:   qty * Number(l.products?.price || 0),
+        });
+      });
+    });
+    if (normalized.length === 0) throw new Error("Aucun produit à facturer.");
 
     const rate     = Number(taxRate != null ? taxRate : org?.tax_rate || 0);
     const subtotal = normalized.reduce((s, l) => s + l.line_total, 0);
@@ -80,14 +79,13 @@ export function useInvoices({ orgId = null, agentId = null } = {}) {
       await supabase.rpc("next_invoice_number", { p_org: orgId });
     if (numErr) throw numErr;
 
-    // 4. Invoice record ----------------------------------------------------------
+    // 4. Invoice record (agent = the PO initiator) ------------------------------
     const { data: invoice, error: insErr } = await supabase
       .from("invoices")
       .insert([{
         organization_id:    orgId,
         invoice_number:     invoiceNumber,
         client_id:          client.id || null,
-        order_id:           orderId,
         issue_date:         new Date().toISOString().slice(0, 10),
         subtotal,
         tax_rate:           rate,
@@ -112,13 +110,21 @@ export function useInvoices({ orgId = null, agentId = null } = {}) {
       .insert(normalized.map(l => ({ ...l, invoice_id: invoice.id })));
     if (lineErr) throw lineErr;
 
-    // 6. PDF + 7. upload + save URL ---------------------------------------------
-    const blob = await buildInvoicePdf(invoice, normalized, org);
+    // 6. Link the purchase orders to this invoice --------------------------------
+    const { error: linkErr } = await supabase
+      .from("orders")
+      .update({ invoice_id: invoice.id })
+      .in("id", orders.map(o => o.id));
+    if (linkErr) throw linkErr;
+
+    // 7. PDF (with each PO's QR) + upload + save URL ----------------------------
+    const poTokens = orders.map(o => ({ po_number: o.po_number, qr_token: o.qr_token }));
+    const blob   = await buildInvoicePdf(invoice, normalized, org, poTokens);
     const pdfUrl = await uploadPdf(invoiceNumber, blob);
     await supabase.from("invoices").update({ pdf_url: pdfUrl }).eq("id", invoice.id);
 
     await load();
-    return { ...invoice, pdf_url: pdfUrl, invoice_lines: normalized };
+    return { ...invoice, pdf_url: pdfUrl, invoice_lines: normalized, purchase_orders: poTokens };
   }
 
   // ── Regenerate the PDF for an existing invoice (manager) ───────────────────
@@ -126,7 +132,9 @@ export function useInvoices({ orgId = null, agentId = null } = {}) {
     if (!org?.stamp_url) throw new Error(STAMP_MISSING_MSG);
     const { data: lines } = await supabase
       .from("invoice_lines").select("*").eq("invoice_id", invoice.id);
-    const blob   = await buildInvoicePdf(invoice, lines || [], org);
+    const { data: pos } = await supabase
+      .from("orders").select("po_number, qr_token").eq("invoice_id", invoice.id);
+    const blob   = await buildInvoicePdf(invoice, lines || [], org, pos || []);
     const pdfUrl = await uploadPdf(invoice.invoice_number, blob);
     await supabase.from("invoices").update({ pdf_url: pdfUrl }).eq("id", invoice.id);
     await load();

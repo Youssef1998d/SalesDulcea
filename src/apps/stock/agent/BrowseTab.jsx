@@ -156,7 +156,7 @@ export function BrowseTab({ stock, loading, clients = [], onPlaceOrder }) {
           </div>
         )}
 
-        {/* Client is required — the order generates a facture for this client */}
+        {/* Client is required — every order belongs to one client */}
         {hasCart && (
           clients.length === 0 ? (
             <div style={{
@@ -171,7 +171,7 @@ export function BrowseTab({ stock, loading, clients = [], onPlaceOrder }) {
               background: T.surface, border: `1px solid ${clientId ? T.accent : T.border}`,
               borderRadius: 12, padding: "4px 14px 0", marginBottom: 8,
             }}>
-              <SelectField label="Client (facture) *" value={clientId} onChange={setClientId}>
+              <SelectField label="Client *" value={clientId} onChange={setClientId}>
                 <option value="">Sélectionner un client...</option>
                 {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </SelectField>
@@ -195,7 +195,7 @@ export function BrowseTab({ stock, loading, clients = [], onPlaceOrder }) {
           size="lg"
           style={{ width: "100%", boxShadow: hasCart ? `0 4px 16px ${T.accent}44` : "none" }}
         >
-          {placing ? "Commande + facture..." : placed ? "✓ Commande & facture créées !" : "Commander & facturer →"}
+          {placing ? "Envoi en cours..." : placed ? "✓ Commande créée !" : "Passer la commande →"}
         </Btn>
       </div>
     </div>
