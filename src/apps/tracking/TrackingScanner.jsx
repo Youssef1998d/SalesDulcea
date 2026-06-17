@@ -54,19 +54,37 @@ export function TrackingScanner({ open, onClose, org, onResolveQr, onGeneratePo 
     setCamState("starting");
     setError(null);
 
-    h.start(
-      { facingMode: { ideal: "environment" } },
-      { fps: 10, qrbox: { width: 220, height: 220 } },
-      decoded => { if (!cancelled) handleToken(decoded); },
-      () => {} // ignore per-frame decode failures
-    )
-      .then(() => { if (!cancelled) setCamState("on"); })
-      .catch(e => {
-        if (!cancelled) {
-          setCamState("error");
-          setError("Caméra indisponible : " + (e?.message || e) + ". Saisissez le code manuellement ci-dessous.");
+    const config = { fps: 10, qrbox: { width: 220, height: 220 } };
+    const onDecode = decoded => { if (!cancelled) handleToken(decoded); };
+
+    // Prefer a real back-camera device id (most reliable on Android Chrome),
+    // then fall back to facingMode strings accepted by html5-qrcode.
+    (async () => {
+      try {
+        let cams = [];
+        try { cams = await Html5Qrcode.getCameras(); } catch { /* permission denied → caught below */ }
+        if (cancelled) return;
+
+        if (cams && cams.length) {
+          const back = cams.find(c => /back|rear|environment|arrière/i.test(c.label || "")) || cams[cams.length - 1];
+          await h.start(back.id, config, onDecode, () => {});
+        } else {
+          await h.start({ facingMode: "environment" }, config, onDecode, () => {});
         }
-      });
+        if (!cancelled) setCamState("on");
+      } catch (e1) {
+        // Last resort: front camera
+        try {
+          await h.start({ facingMode: "user" }, config, onDecode, () => {});
+          if (!cancelled) setCamState("on");
+        } catch (e2) {
+          if (!cancelled) {
+            setCamState("error");
+            setError("Caméra indisponible : " + (e2?.message || e2) + ". Autorisez la caméra ou saisissez le code manuellement.");
+          }
+        }
+      }
+    })();
 
     return () => {
       cancelled = true;
