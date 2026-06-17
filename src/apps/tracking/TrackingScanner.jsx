@@ -28,6 +28,7 @@ export function TrackingScanner({ open, onClose, org, onResolveQr, onGeneratePo 
   poRef.current      = onGeneratePo;
 
   const scannerRef = useRef(null);
+  const hostRef    = useRef(null); // React-owned wrapper; the scanner's div is appended imperatively
 
   async function handleToken(token) {
     const t = String(token || "").trim();
@@ -48,7 +49,16 @@ export function TrackingScanner({ open, onClose, org, onResolveQr, onGeneratePo 
 
   useEffect(() => {
     if (!open || order) return;
+    if (!hostRef.current) return;
     let cancelled = false;
+
+    // Create the scanner's element imperatively inside a React-owned host.
+    // React never sees html5-qrcode's injected <video>/overlay nodes, so it
+    // can't crash trying to remove children it didn't create.
+    const el = document.createElement("div");
+    el.id = READER_ID;
+    hostRef.current.appendChild(el);
+
     const h = new Html5Qrcode(READER_ID);
     scannerRef.current = h;
     setCamState("starting");
@@ -89,7 +99,15 @@ export function TrackingScanner({ open, onClose, org, onResolveQr, onGeneratePo 
     return () => {
       cancelled = true;
       const inst = scannerRef.current;
-      if (inst) inst.stop().catch(() => {}).finally(() => { try { inst.clear(); } catch {} });
+      const cleanupEl = () => {
+        try { inst && inst.clear(); } catch { /* noop */ }
+        try { if (el && el.parentNode) el.parentNode.removeChild(el); } catch { /* noop */ }
+      };
+      if (inst) {
+        Promise.resolve(inst.stop()).catch(() => {}).finally(cleanupEl);
+      } else {
+        cleanupEl();
+      }
     };
   }, [open, order, attempt]); // eslint-disable-line
 
@@ -135,7 +153,7 @@ export function TrackingScanner({ open, onClose, org, onResolveQr, onGeneratePo 
 
             {/* Camera viewport — sized so the video is always visible */}
             <div style={{ position: "relative", width: "100%", minHeight: 300, borderRadius: 12, overflow: "hidden", border: `1px solid ${T.border}`, background: "#000" }}>
-              <div id={READER_ID} style={{ width: "100%" }} />
+              <div ref={hostRef} style={{ width: "100%" }} />
               {camState === "starting" && (
                 <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 13 }}>
                   Démarrage de la caméra…

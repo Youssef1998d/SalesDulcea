@@ -6,6 +6,7 @@ import { AuthScreen }   from "./platform/AuthScreen";
 import { PendingScreen } from "./platform/PendingScreen";
 import { AgentApp, KAMApp } from "./apps/sales";
 import { StockManagerApp } from "./apps/stock";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 function LoadingScreen() {
   const T = buildTheme(null, "dark");
@@ -66,6 +67,7 @@ export default function App() {
 
   return (
     <ThemeContext.Provider value={theme}>
+      <ErrorBoundary>
       {loading && <LoadingScreen />}
 
       {!loading && !user && (
@@ -113,6 +115,7 @@ export default function App() {
           themeMode={themeMode}
         />
       )}
+      </ErrorBoundary>
     </ThemeContext.Provider>
   );
 }
