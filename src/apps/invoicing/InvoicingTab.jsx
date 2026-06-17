@@ -155,7 +155,7 @@ export function InvoicingTab({
           org={org}
           role={role}
           onClose={() => setDetail(null)}
-          onRecordPayment={async (inv, amt) => { await recordPayment(inv, amt); setDetail(d => d && ({ ...d, amount_paid: Number(d.amount_paid || 0) + amt })); }}
+          onRecordPayment={async (inv, amt) => { const res = await recordPayment(inv, amt); setDetail(d => d && ({ ...d, amount_paid: res.amount_paid, status: res.status })); }}
           onCancel={async (inv) => { await cancelInvoice(inv.id); setDetail(d => d && ({ ...d, status: "cancelled" })); }}
           onRegenerate={async (inv) => { const url = await regeneratePdf(inv, org); setDetail(d => d && ({ ...d, pdf_url: url })); }}
         />

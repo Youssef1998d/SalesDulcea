@@ -6,10 +6,11 @@ import { INVOICE_STATUS, ENTITY_TYPES, fmtMoneyDT, fmtDateFr } from "../../core/
 // Full invoice details page (overlay). Shows preview + agent/manager actions.
 export function InvoiceDetailScreen({ invoice, org, role, onClose, onRecordPayment, onCancel, onRegenerate }) {
   const T = useTheme();
-  const [payOpen, setPayOpen] = useState(false);
-  const [payAmt,  setPayAmt]  = useState("");
-  const [busy,    setBusy]    = useState(false);
-  const [msg,     setMsg]     = useState(null);
+  const [payOpen,  setPayOpen]  = useState(false);
+  const [payAmt,   setPayAmt]   = useState("");
+  const [payError, setPayError] = useState(null);
+  const [busy,     setBusy]     = useState(false);
+  const [msg,      setMsg]      = useState(null);
 
   const isManager = role === "kam" || role === "superadmin";
   const st = INVOICE_STATUS[invoice.status] || INVOICE_STATUS.issued;
@@ -42,12 +43,17 @@ export function InvoiceDetailScreen({ invoice, org, role, onClose, onRecordPayme
   }
 
   async function submitPayment() {
-    if (!payAmt || Number(payAmt) <= 0) return;
+    // Accept both "50.5" and the French "50,5"
+    const amt = Number(String(payAmt).replace(",", ".").trim());
+    if (!isFinite(amt) || amt <= 0) { setPayError("Veuillez saisir un montant valide."); return; }
+    setPayError(null);
     setBusy(true);
     try {
-      await onRecordPayment(invoice, Number(payAmt));
+      await onRecordPayment(invoice, amt);
       setPayOpen(false);
       setPayAmt("");
+    } catch (e) {
+      setPayError(e.message || "Échec de l'enregistrement du paiement.");
     } finally { setBusy(false); }
   }
 
@@ -155,11 +161,20 @@ export function InvoiceDetailScreen({ invoice, org, role, onClose, onRecordPayme
       </div>
 
       {/* Payment modal */}
-      <Modal open={payOpen} onClose={() => setPayOpen(false)} title="ENREGISTRER UN PAIEMENT">
+      <Modal open={payOpen} onClose={() => { setPayOpen(false); setPayError(null); }} title="ENREGISTRER UN PAIEMENT">
         <div style={{ fontSize: 13, color: T.textSub, marginBottom: 14 }}>
           Total : {fmtMoneyDT(invoice.total_amount)} · Reste à payer : {fmtMoneyDT(remaining)}
         </div>
-        <Input label="Montant reçu (DT)" type="number" value={payAmt} onChange={setPayAmt} placeholder={String(remaining)} />
+        <Input label="Montant reçu (DT)" type="text" inputMode="decimal" value={payAmt} onChange={setPayAmt} placeholder={String(remaining)} />
+        {payError && (
+          <div style={{
+            background: T.mode === "dark" ? "#1f0a0a" : "#fff5f5",
+            border: `1px solid ${T.danger}44`, color: T.danger,
+            borderRadius: 10, padding: "10px 14px", fontSize: 13, marginBottom: 14,
+          }}>
+            {payError}
+          </div>
+        )}
         <Btn style={{ width: "100%" }} onClick={submitPayment} disabled={busy}>
           {busy ? "Enregistrement..." : "Valider le paiement"}
         </Btn>

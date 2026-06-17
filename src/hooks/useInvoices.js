@@ -137,12 +137,16 @@ export function useInvoices({ orgId = null, agentId = null } = {}) {
 
   // ── Record a payment ───────────────────────────────────────────────────────
   async function recordPayment(invoice, amount) {
-    const paid   = Number(invoice.amount_paid || 0) + Number(amount);
+    const add = Number(amount);
+    if (!isFinite(add) || add <= 0) throw new Error("Montant de paiement invalide.");
+    const paid   = Number(invoice.amount_paid || 0) + add;
     const status = statusFromPayment(invoice.total_amount, paid);
-    await supabase.from("invoices")
+    const { error } = await supabase.from("invoices")
       .update({ amount_paid: paid, status })
       .eq("id", invoice.id);
+    if (error) throw error;
     await load();
+    return { amount_paid: paid, status };
   }
 
   // ── Cancel an invoice (manager) ────────────────────────────────────────────

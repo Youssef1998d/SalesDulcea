@@ -70,7 +70,7 @@ export function Card({ children, accent, style: extStyle = {}, onClick, hover = 
 }
 
 // ─── Input ────────────────────────────────────────────────────────────────────
-export function Input({ label, value, onChange, placeholder, type = "text", hint, autoFocus = false, style: extStyle = {} }) {
+export function Input({ label, value, onChange, placeholder, type = "text", inputMode, hint, autoFocus = false, style: extStyle = {} }) {
   const T      = useTheme();
   const mobile = useIsMobile();
   const [focused, setFocused] = useState(false);
@@ -111,6 +111,7 @@ export function Input({ label, value, onChange, placeholder, type = "text", hint
       <input
         ref={ref}
         type={type}
+        inputMode={inputMode}
         value={value}
         placeholder={placeholder}
         onChange={e => onChange(e.target.value)}
