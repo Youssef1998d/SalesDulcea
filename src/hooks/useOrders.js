@@ -80,15 +80,18 @@ export function useOrders({ agentId = null, orgId = null } = {}) {
   }
 
   // Look up an order by its QR token (for the in-app scanner), scoped to the org.
-  async function findByQrToken(token) {
-    const { data } = await supabase
+  // Memoized so the scanner effect that depends on it doesn't churn.
+  const findByQrToken = useCallback(async (token) => {
+    if (!orgId) return null;
+    const { data, error } = await supabase
       .from("orders")
       .select(ORDER_SELECT)
       .eq("org_id", orgId)
       .eq("qr_token", String(token).trim())
       .maybeSingle();
+    if (error) throw error;
     return data || null;
-  }
+  }, [orgId]);
 
   // Mark an order shipped (Expédiée) — between confirmed and delivered.
   async function markShipped(orderId) {
