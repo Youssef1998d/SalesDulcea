@@ -7,6 +7,7 @@ import { ProductsTab } from "./ProductsTab";
 import { OverviewTab } from "./OverviewTab";
 import { SalesTab }    from "./SalesTab";
 import { InvoicingTab, CompanySettings } from "../../invoicing";
+import { useOrders } from "../../../hooks/useOrders";
 
 export function KAMApp({ user, onSignOut, agent, onThemeToggle, themeMode }) {
   const [tab,           setTab]     = useState("overview");
@@ -19,6 +20,9 @@ export function KAMApp({ user, onSignOut, agent, onThemeToggle, themeMode }) {
   const [loading,       setLoading] = useState(false);
   const [org,           setOrg]     = useState(agent?.organizations || null);
   const [settingsOpen,  setSettingsOpen] = useState(false);
+
+  const { orders: orgOrders, load: loadOrders } = useOrders({ orgId: agent?.org_id });
+  useEffect(() => { if (agent?.org_id) loadOrders(); }, [agent, loadOrders]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -142,7 +146,8 @@ export function KAMApp({ user, onSignOut, agent, onThemeToggle, themeMode }) {
           agentId={user.id}
           org={org}
           clients={allClients}
-          products={products}
+          orders={orgOrders}
+          onOrdersChanged={loadOrders}
           onOpenSettings={() => setSettingsOpen(true)}
         />
       )}

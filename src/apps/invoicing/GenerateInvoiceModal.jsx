@@ -31,6 +31,8 @@ export function GenerateInvoiceModal({ open, onClose, clients, orders = [], org,
     [orders, clientId]
   );
   const chosenOrders = clientOrders.filter(o => selected[o.id]);
+  // POs combined on one invoice must share the same agent — lock to the first pick.
+  const lockedAgentId = chosenOrders[0]?.agent_id || null;
 
   const subtotal = chosenOrders.reduce((s, o) => s + poTotal(o), 0);
   const taxAmt   = subtotal * Number(taxRate || 0) / 100;
@@ -95,12 +97,15 @@ export function GenerateInvoiceModal({ open, onClose, clients, orders = [], org,
             <div style={{ marginBottom: 14 }}>
               {clientOrders.map(o => {
                 const on = !!selected[o.id];
+                const blocked = lockedAgentId && o.agent_id !== lockedAgentId && !on;
                 return (
                   <div key={o.id}
-                    onClick={() => setSelected(s => ({ ...s, [o.id]: !s[o.id] }))}
+                    onClick={() => { if (!blocked) setSelected(s => ({ ...s, [o.id]: !s[o.id] })); }}
+                    title={blocked ? "Commande d'un autre agent — une facture ne regroupe qu'un seul agent" : ""}
                     style={{
                       display: "flex", justifyContent: "space-between", alignItems: "center",
-                      gap: 10, cursor: "pointer",
+                      gap: 10, cursor: blocked ? "not-allowed" : "pointer",
+                      opacity: blocked ? 0.45 : 1,
                       background: on ? T.accent + "22" : T.surfaceHi,
                       border: `1.5px solid ${on ? T.accent : T.border}`,
                       borderRadius: 10, padding: "10px 12px", marginBottom: 8,
@@ -111,6 +116,7 @@ export function GenerateInvoiceModal({ open, onClose, clients, orders = [], org,
                       </div>
                       <div style={{ fontSize: 11, color: T.textDim, marginTop: 2 }}>
                         {new Date(o.created_at).toLocaleDateString("fr-FR")} · {(o.order_lines || []).length} produit(s)
+                        {o.agents?.full_name ? ` · ${o.agents.full_name}` : ""}
                       </div>
                     </div>
                     <div style={{ fontSize: 13, color: T.gold, fontWeight: 700 }}>{fmtMoneyDT(poTotal(o))}</div>

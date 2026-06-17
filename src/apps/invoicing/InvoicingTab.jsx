@@ -10,7 +10,7 @@ import { InvoiceDetailScreen } from "./InvoiceDetailScreen";
 //   orders : agent's own orders (to offer invoiceable POs). A PO can be billed
 //            once confirmed or delivered, and only if not already invoiced.
 export function InvoicingTab({
-  role, orgId, agentId, org, clients = [], orders = [], onOpenSettings,
+  role, orgId, agentId, org, clients = [], orders = [], onOpenSettings, onOrdersChanged,
 }) {
   const T = useTheme();
   const isAgent = role === "agent";
@@ -23,35 +23,34 @@ export function InvoicingTab({
 
   useEffect(() => { load(); }, [load]);
 
-  const invoiceableOrders = isAgent
-    ? orders.filter(o => ["confirmed", "delivered"].includes(o.status) && !o.invoice_id)
-    : [];
+  // Agents bill their own POs; managers can bill any agent's POs in the org.
+  const invoiceableOrders = orders.filter(o => ["confirmed", "delivered"].includes(o.status) && !o.invoice_id);
 
   async function handleGenerate(payload) {
-    const created = await createInvoice({ ...payload, org, createdBy: agentId });
+    // The invoice is attributed to the PO's initiating agent.
+    const createdBy = payload.orders?.[0]?.agent_id || agentId;
+    const created = await createInvoice({ ...payload, org, createdBy });
+    onOrdersChanged?.();
     setDetail(created);
   }
 
   return (
     <div>
-      {isAgent && (
-        <Btn style={{ width: "100%", marginBottom: 4 }} onClick={() => setGenOpen(true)} disabled={!invoiceableOrders.length}>
-          + Générer une facture
-        </Btn>
-      )}
-      {isAgent && (
-        <div style={{ fontSize: 12, color: T.textDim, textAlign: "center", marginBottom: 16 }}>
-          {invoiceableOrders.length
-            ? `${invoiceableOrders.length} commande(s) facturable(s) · regroupez les commandes d'un même client`
-            : "Aucune commande facturable (confirmée ou livrée) pour le moment"}
-        </div>
-      )}
-
       {!isAgent && onOpenSettings && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
           <Btn variant="subtle" size="sm" onClick={onOpenSettings}>⚙ Paramètres société</Btn>
         </div>
       )}
+
+      <Btn style={{ width: "100%", marginBottom: 4 }} onClick={() => setGenOpen(true)} disabled={!invoiceableOrders.length}>
+        + Générer une facture
+      </Btn>
+      <div style={{ fontSize: 12, color: T.textDim, textAlign: "center", marginBottom: 16 }}>
+        {invoiceableOrders.length
+          ? `${invoiceableOrders.length} commande(s) facturable(s) · regroupez les commandes d'un même client et agent`
+          : "Aucune commande facturable (confirmée ou livrée) pour le moment"}
+      </div>
+
       {!isAgent && org && !org.stamp_url && (
         <div style={{
           background: T.mode === "dark" ? "#1f0a0a" : "#fff5f5",

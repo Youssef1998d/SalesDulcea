@@ -211,6 +211,7 @@ export function AgentApp({ user, agent, onSignOut, onThemeToggle, themeMode }) {
           org={org}
           clients={clients}
           orders={orders}
+          onOrdersChanged={loadOrders}
         />
       )}
       {tab === "manage-stock" && canManage && (
