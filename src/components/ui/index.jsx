@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "../../core/theme";
 import { useIsMobile } from "../../hooks/useIsMobile";
+import { Icon } from "../Icon";
 
 // ─── Button ───────────────────────────────────────────────────────────────────
 export function Btn({ children, onClick, disabled, variant = "primary", size = "md", style: extStyle = {}, type = "button" }) {
@@ -200,25 +201,31 @@ export function StatGrid({ stats }) {
   );
 }
 
-// ─── KPI Card (desktop) ───────────────────────────────────────────────────────
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
 export function KPICard({ value, label, sub, accent = false, icon }) {
-  const T = useTheme();
+  const T      = useTheme();
+  const mobile = useIsMobile();
   return (
     <div style={{
       background: T.surface, border: `1px solid ${T.border}`,
       borderLeft: `3px solid ${accent ? T.accent : T.border}`,
-      borderRadius: 14, padding: "20px 22px",
-      boxShadow: T.shadow, flex: 1,
+      borderRadius: 14, padding: mobile ? "14px 14px" : "20px 22px",
+      boxShadow: T.shadow, flex: 1, minWidth: 0, overflow: "hidden",
     }}>
-      {icon && <div style={{ fontSize: 20, marginBottom: 8 }}>{icon}</div>}
+      {icon && (
+        <div style={{ color: accent ? T.accent : T.textSub, marginBottom: 8, display: "flex" }}>
+          <Icon name={icon} size={mobile ? 18 : 20} />
+        </div>
+      )}
       <div style={{
         fontFamily: "'Bebas Neue', sans-serif",
-        fontSize: 40, color: accent ? T.accent : T.text,
-        letterSpacing: 1, lineHeight: 1,
+        fontSize: mobile ? 26 : 40, color: accent ? T.accent : T.text,
+        letterSpacing: 1, lineHeight: 1.05,
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
       }}>
         {value}
       </div>
-      <div style={{ fontSize: 12, color: T.textSub, marginTop: 6, fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.5 }}>
+      <div style={{ fontSize: mobile ? 10 : 12, color: T.textSub, marginTop: 6, fontWeight: 500, textTransform: "uppercase", letterSpacing: 0.5 }}>
         {label}
       </div>
       {sub && <div style={{ fontSize: 12, color: T.textDim, marginTop: 2 }}>{sub}</div>}

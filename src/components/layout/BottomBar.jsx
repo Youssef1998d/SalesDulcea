@@ -1,4 +1,5 @@
 import { useTheme } from "../../core/theme";
+import { Icon } from "../Icon";
 
 export function BottomBar({ tabs, active, onChange }) {
   const T = useTheme();
@@ -59,8 +60,8 @@ export function BottomBar({ tabs, active, onChange }) {
             )}
 
             {/* Icon */}
-            <div style={{ fontSize: 22, lineHeight: 1, transition: "transform 0.15s" }}>
-              {t.icon}
+            <div style={{ color: on ? T.accent : T.textDim, display: "flex", transition: "color 0.15s" }}>
+              <Icon name={t.icon} size={22} />
             </div>
 
             {/* Label */}
@@ -68,7 +69,7 @@ export function BottomBar({ tabs, active, onChange }) {
               fontSize: 9, fontWeight: on ? 700 : 500,
               color: on ? T.accent : T.textDim,
               letterSpacing: 0.5, textTransform: "uppercase",
-              transition: "color 0.15s",
+              transition: "color 0.15s", whiteSpace: "nowrap",
             }}>
               {t.label}
             </div>

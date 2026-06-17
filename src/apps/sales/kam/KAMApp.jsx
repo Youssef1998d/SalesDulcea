@@ -80,12 +80,12 @@ export function KAMApp({ user, onSignOut, agent, onThemeToggle, themeMode }) {
 
   const pending = agents.filter(a => a.status === "pending");
   const kamTabs = [
-    { id: "overview",  icon: "📊", label: "Overview", badge: 0 },
-    { id: "agents",    icon: "👥", label: "Équipe",   badge: pending.length },
-    { id: "products",  icon: "📦", label: "Produits", badge: 0 },
-    { id: "orders",    icon: "📑", label: "Commandes", badge: 0 },
-    { id: "sales",     icon: "💰", label: "Ventes",   badge: 0 },
-    { id: "invoices",  icon: "🧾", label: "Factures", badge: 0 },
+    { id: "overview",  icon: "grid",          label: "Synthèse",  badge: 0 },
+    { id: "agents",    icon: "users",         label: "Équipe",    badge: pending.length },
+    { id: "products",  icon: "box",           label: "Produits",  badge: 0 },
+    { id: "orders",    icon: "shopping-cart", label: "Commandes", badge: 0 },
+    { id: "sales",     icon: "trending-up",   label: "Ventes",    badge: 0 },
+    { id: "invoices",  icon: "file-text",     label: "Factures",  badge: 0 },
   ];
 
   return (

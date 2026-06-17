@@ -49,10 +49,10 @@ export function OverviewTab({ agents, allVisits, allClients, allSales }) {
         gridTemplateColumns: mobile ? "1fr 1fr" : "repeat(4, 1fr)",
         gap: 12, marginBottom: 28,
       }}>
-        <KPICard value={`${fmtS(totalGMV)} DT`} label="GMV Total"        accent icon="💰" />
-        <KPICard value={active.length}            label="Agents actifs"           icon="👥" />
-        <KPICard value={`${avgConv}%`}            label="Conv. moyenne"   accent icon="📈" />
-        <KPICard value={`${fmtS(totalComm)} DT`}  label="Commissions"     icon="🏆" />
+        <KPICard value={`${fmtS(totalGMV)} DT`} label="GMV Total"      accent icon="dollar-sign" />
+        <KPICard value={active.length}            label="Agents actifs"        icon="users" />
+        <KPICard value={`${avgConv}%`}            label="Conv. moyenne" accent icon="trending-up" />
+        <KPICard value={`${fmtS(totalComm)} DT`}  label="Commissions"          icon="award" />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: mobile ? "1fr" : "3fr 2fr", gap: 20 }}>

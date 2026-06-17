@@ -1,4 +1,5 @@
 import { useTheme } from "../../core/theme";
+import { Icon } from "../Icon";
 
 export function OrgHeader({ rightSlot, onThemeToggle, themeMode, compact = false }) {
   const T = useTheme();
@@ -51,13 +52,13 @@ export function OrgHeader({ rightSlot, onThemeToggle, themeMode, compact = false
             title={themeMode === "dark" ? "Mode clair" : "Mode sombre"}
             style={{
               background: "none", border: `1px solid ${T.border}`,
-              borderRadius: 8, padding: "6px 10px",
-              cursor: "pointer", color: T.textSub, fontSize: 14,
+              borderRadius: 8, padding: 8,
+              cursor: "pointer", color: T.textSub,
               display: "flex", alignItems: "center", justifyContent: "center",
               transition: "all 0.15s",
             }}
           >
-            {themeMode === "dark" ? "☀️" : "🌙"}
+            <Icon name={themeMode === "dark" ? "sun" : "moon"} size={16} />
           </button>
         )}
         {rightSlot}

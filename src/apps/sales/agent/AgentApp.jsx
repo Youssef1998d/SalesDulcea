@@ -121,20 +121,20 @@ export function AgentApp({ user, agent, onSignOut, onThemeToggle, themeMode }) {
   const pendingOrders = allOrders.filter(o => o.status === "pending").length;
 
   const tabs = [
-    { id: "log",      icon: "📋", label: "Log",      badge: 0 },
-    { id: "followup", icon: "🔁", label: "Relances",  badge: followups.length },
-    { id: "clients",  icon: "👥", label: "Clients",   badge: 0 },
-    { id: "invoices", icon: "🧾", label: "Factures",  badge: 0 },
-    { id: "dash",     icon: "📊", label: "Stats",     badge: 0 },
+    { id: "log",      icon: "clipboard", label: "Log",       badge: 0 },
+    { id: "followup", icon: "repeat",    label: "Relances",  badge: followups.length },
+    { id: "clients",  icon: "users",     label: "Clients",   badge: 0 },
+    { id: "invoices", icon: "file-text", label: "Factures",  badge: 0 },
+    { id: "dash",     icon: "bar-chart", label: "Stats",     badge: 0 },
     ...(canOrder ? [
-      { id: "stock",  icon: "📦", label: "Stock",     badge: 0 },
+      { id: "stock",  icon: "box",          label: "Stock",     badge: 0 },
     ] : []),
     ...(canOrder ? [
-      { id: "orders", icon: "🧾", label: "Commandes", badge: 0 },
+      { id: "orders", icon: "shopping-cart", label: "Commandes", badge: 0 },
     ] : []),
     ...(canManage ? [
-      { id: "manage-orders", icon: "✅", label: "Valider", badge: pendingOrders },
-      { id: "manage-stock",  icon: "🏷️", label: "Gestion",  badge: 0 },
+      { id: "manage-orders", icon: "check-circle", label: "Valider", badge: pendingOrders },
+      { id: "manage-stock",  icon: "tag",          label: "Gestion",  badge: 0 },
     ] : []),
   ];
 

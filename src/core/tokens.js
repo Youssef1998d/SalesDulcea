@@ -27,7 +27,11 @@ style.textContent = `
   html, body { margin: 0; padding: 0; min-height: 100%; }
   body { background: #0a1628; font-family: 'Inter', sans-serif; }
   input, select, textarea, button { font-family: 'Inter', sans-serif; }
+  /* Prevent native inputs/selects from forcing their parent wider than the
+     viewport (a common cause of horizontal overflow on mobile). */
+  input, select, textarea { min-width: 0; max-width: 100%; }
   input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
+  img, svg { max-width: 100%; }
 
   ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }

@@ -27,8 +27,8 @@ export function StockManagerApp({ user, agent, onSignOut, onThemeToggle, themeMo
   const pendingCount = orders.filter(o => o.status === "pending").length;
 
   const tabs = [
-    { id: "orders", icon: "🧾", label: "Commandes", badge: pendingCount },
-    { id: "stock",  icon: "📦", label: "Stock",     badge: 0 },
+    { id: "orders", icon: "shopping-cart", label: "Commandes", badge: pendingCount },
+    { id: "stock",  icon: "box",           label: "Stock",     badge: 0 },
   ];
 
   return (
