@@ -1,60 +1,67 @@
 import { useTheme } from "../../core/theme";
-import { EBLogo } from "./EBLogo";
 
-/**
- * OrgHeader renders the organization's identity at the top of the app.
- *
- * If the org has a logo_url: show the logo image + org name.
- * If not: show the org name in the org's accent color using Bebas Neue.
- * Below both: "powered by EAST BLUE" in small text with the animated logo.
- *
- * The East Blue navy background always stays — only the accent and logo change.
- */
-export function OrgHeader({ rightSlot }) {
+export function OrgHeader({ rightSlot, onThemeToggle, themeMode, compact = false }) {
   const T = useTheme();
 
   return (
     <div style={{
-      background:`linear-gradient(135deg, ${T.surface}, ${T.bg})`,
-      padding:"14px 20px 12px",
-      borderBottom:`1px solid ${T.border}`,
-      display:"flex",
-      justifyContent:"space-between",
-      alignItems:"center",
+      background: T.mode === "dark"
+        ? `linear-gradient(135deg, ${T.surface}, ${T.bg})`
+        : T.surface,
+      padding: compact ? "10px 20px" : "12px 20px",
+      borderBottom: `1px solid ${T.border}`,
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      flexShrink: 0,
+      zIndex: 100,
+      boxShadow: T.mode === "light" ? "0 1px 3px rgba(0,0,0,0.06)" : "none",
     }}>
-      <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-        {/* Org identity */}
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+      {/* Org identity */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {T.orgLogo ? (
             <img
               src={T.orgLogo}
               alt={T.orgName}
-              style={{ height:28, objectFit:"contain", borderRadius:4 }}
+              style={{ height: 26, objectFit: "contain", borderRadius: 4 }}
             />
           ) : (
             <div style={{
-              fontFamily:"'Bebas Neue',sans-serif",
-              fontSize:22,
-              color:T.accent,
-              letterSpacing:2,
-              lineHeight:1,
+              fontFamily: "'Bebas Neue', sans-serif",
+              fontSize: 20, color: T.accent,
+              letterSpacing: 3, lineHeight: 1,
             }}>
               {T.orgName}
             </div>
           )}
         </div>
-
-        {/* Powered by East Blue */}
-        <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-          <span style={{ fontSize:9, color:T.textDim, letterSpacing:0.8, textTransform:"uppercase" }}>
-            powered by
-          </span>
-          <EBLogo size="sm" />
-        </div>
+        {!compact && (
+          <div style={{ fontSize: 9, color: T.textDim, letterSpacing: 0.8, textTransform: "uppercase" }}>
+            powered by East Blue
+          </div>
+        )}
       </div>
 
-      {/* Right slot: sign out button, CSV export, etc. */}
-      {rightSlot && <div style={{ display:"flex", gap:8, alignItems:"center" }}>{rightSlot}</div>}
+      {/* Right controls */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        {onThemeToggle && (
+          <button
+            onClick={onThemeToggle}
+            title={themeMode === "dark" ? "Mode clair" : "Mode sombre"}
+            style={{
+              background: "none", border: `1px solid ${T.border}`,
+              borderRadius: 8, padding: "6px 10px",
+              cursor: "pointer", color: T.textSub, fontSize: 14,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "all 0.15s",
+            }}
+          >
+            {themeMode === "dark" ? "☀️" : "🌙"}
+          </button>
+        )}
+        {rightSlot}
+      </div>
     </div>
   );
 }

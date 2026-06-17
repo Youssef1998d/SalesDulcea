@@ -2,35 +2,69 @@ import { useTheme } from "../../core/theme";
 
 export function BottomBar({ tabs, active, onChange }) {
   const T = useTheme();
+
   return (
     <div style={{
-      position:"fixed", bottom:0, left:"50%", transform:"translateX(-50%)",
-      width:"100%", maxWidth:480,
-      background:T.surface, borderTop:`1px solid ${T.border}`,
-      display:"flex", zIndex:100,
-      paddingBottom:"env(safe-area-inset-bottom,0px)",
+      position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)",
+      width: "100%", maxWidth: 480,
+      background: T.surface,
+      borderTop: `1px solid ${T.border}`,
+      display: "flex",
+      zIndex: 200,
+      paddingBottom: "env(safe-area-inset-bottom, 0px)",
+      boxShadow: T.mode === "light"
+        ? "0 -4px 16px rgba(0,0,0,0.08)"
+        : "0 -4px 16px rgba(0,0,0,0.4)",
     }}>
-      {tabs.map(t => {
+      {tabs.slice(0, 5).map(t => {
         const on = active === t.id;
         return (
-          <button key={t.id} onClick={()=>onChange(t.id)} style={{
-            flex:1, padding:"10px 4px 8px", background:"none", border:"none",
-            cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:3, position:"relative",
-          }}>
+          <button
+            key={t.id}
+            onClick={() => onChange(t.id)}
+            style={{
+              flex: 1, padding: "10px 4px 10px", background: "none", border: "none",
+              cursor: "pointer", display: "flex", flexDirection: "column",
+              alignItems: "center", gap: 3, position: "relative",
+              minHeight: 60,
+            }}
+          >
+            {/* Active top line */}
+            {on && (
+              <div style={{
+                position: "absolute", top: 0, left: "25%", right: "25%",
+                height: 2, background: T.accent,
+                borderRadius: "0 0 2px 2px",
+              }} />
+            )}
+
+            {/* Badge */}
             {t.badge > 0 && (
               <div style={{
-                position:"absolute", top:6, right:"50%", transform:"translateX(12px)",
-                background:T.danger, color:"#fff",
-                fontSize:9, fontWeight:700, borderRadius:10, padding:"1px 5px", minWidth:16, textAlign:"center",
-              }}>{t.badge}</div>
+                position: "absolute", top: 6, right: "50%", transform: "translateX(14px)",
+                background: "#f87171", color: "#fff",
+                fontSize: 9, fontWeight: 700, borderRadius: 10,
+                padding: "1px 5px", minWidth: 16, textAlign: "center",
+                animation: "badgePulse 0.3s ease",
+              }}>
+                {t.badge}
+              </div>
             )}
-            <div style={{ fontSize:20 }}>{t.icon}</div>
+
+            {/* Icon */}
+            <div style={{ fontSize: 22, lineHeight: 1, transition: "transform 0.15s" }}>
+              {t.icon}
+            </div>
+
+            {/* Label */}
             <div style={{
-              fontSize:9, fontWeight:on?700:500,
-              color:on?T.accent:T.textDim,
-              letterSpacing:0.5, textTransform:"uppercase",
-            }}>{t.label}</div>
-            {on && <div style={{ position:"absolute", top:0, left:"20%", right:"20%", height:2, background:T.accent, borderRadius:"0 0 2px 2px" }} />}
+              fontSize: 9, fontWeight: on ? 700 : 500,
+              color: on ? T.accent : T.textDim,
+              letterSpacing: 0.5, textTransform: "uppercase",
+              transition: "color 0.15s",
+            }}>
+              {t.label}
+            </div>
           </button>
         );
       })}

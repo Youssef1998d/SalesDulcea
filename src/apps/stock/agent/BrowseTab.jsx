@@ -1,13 +1,14 @@
 import { useState } from "react";
 import { useTheme } from "../../../core/theme";
-import { Card, Btn, Badge, SectionTitle, EmptyState, Input } from "../../../components/ui";
+import { Btn, Badge, SectionTitle, EmptyState, SkeletonList } from "../../../components/ui";
 
 export function BrowseTab({ stock, loading, onPlaceOrder }) {
-  const T = useTheme();
-  const [cart, setCart] = useState({}); // productId -> qty
+  const T       = useTheme();
+  const [cart,    setCart]    = useState({});
   const [placing, setPlacing] = useState(false);
-  const [placed, setPlaced] = useState(false);
+  const [placed,  setPlaced]  = useState(false);
 
+  // Group by product
   const byProduct = {};
   stock.forEach(s => {
     const p = s.products;
@@ -25,49 +26,134 @@ export function BrowseTab({ stock, loading, onPlaceOrder }) {
   async function submit() {
     const lines = Object.entries(cart)
       .filter(([, q]) => Number(q) > 0)
-      .map(([productId, q]) => ({ productId, quantity: q, unit: byProduct[productId]?.product.unit }));
+      .map(([productId, q]) => ({
+        productId,
+        quantity: q,
+        unit: byProduct[productId]?.product.unit,
+      }));
     if (!lines.length) return;
     setPlacing(true);
     try {
       await onPlaceOrder(lines);
       setCart({});
       setPlaced(true);
-      setTimeout(() => setPlaced(false), 2000);
+      setTimeout(() => setPlaced(false), 2500);
     } finally { setPlacing(false); }
   }
 
-  const hasCart = Object.values(cart).some(q => Number(q) > 0);
+  const cartTotal = Object.values(cart).reduce((s, q) => s + Number(q || 0), 0);
+  const hasCart   = cartTotal > 0;
 
-  if (loading) return <EmptyState icon="📦" title="Chargement..." />;
-  if (!rows.length) return <EmptyState icon="📦" title="Aucun stock disponible" sub="Revenez plus tard" />;
+  if (loading) return <SkeletonList count={4} height={80} />;
+  if (!rows.length) return (
+    <EmptyState icon="📦" title="Aucun stock disponible" sub="Le responsable stock n'a pas encore ajouté de lots. Revenez plus tard." />
+  );
 
   return (
     <div>
       <SectionTitle>Stock disponible</SectionTitle>
-      {rows.map(({ product, available, incoming }) => (
-        <Card key={product.id}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
-            <div>
-              <div style={{ fontWeight:700, fontSize:14, color:T.text }}>{product.name}</div>
-              <div style={{ fontSize:12, color:T.textSub, marginTop:2 }}>{available} {product.unit} disponibles</div>
-              {incoming.map(s => (
-                <div key={s.id} style={{ marginTop:4 }}>
-                  <Badge color={T.info}>
-                    +{s.quantity} {product.unit} — arrivée {s.expected_date ? new Date(s.expected_date).toLocaleDateString("fr-FR") : "?"}
-                  </Badge>
+
+      {rows.map(({ product, available, incoming }) => {
+        const qty    = Number(cart[product.id] || "");
+        const hasQty = qty > 0;
+        const low    = available < 50 && available > 0;
+        const empty  = available === 0;
+
+        return (
+          <div key={product.id} style={{
+            background: T.surface, border: `1px solid ${T.border}`,
+            borderLeft: `3px solid ${hasQty ? T.accent : empty ? T.danger : low ? T.warning : T.success}`,
+            borderRadius: 14, padding: "14px 16px", marginBottom: 10,
+            boxShadow: T.shadow,
+            opacity: empty ? 0.6 : 1,
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div style={{ flex: 1, paddingRight: 12 }}>
+                <div style={{ fontWeight: 700, fontSize: 15, color: T.text, marginBottom: 4 }}>
+                  {product.name}
                 </div>
-              ))}
-            </div>
-            <div style={{ width:90 }}>
-              <Input type="number" value={cart[product.id] || ""} placeholder="Qté" onChange={v => setQty(product.id, v)} />
+                <div style={{ fontSize: 13, color: empty ? T.danger : low ? T.warning : T.textSub }}>
+                  {empty ? "Rupture de stock" : `${available} ${product.unit} disponibles`}
+                </div>
+
+                {/* Incoming badges */}
+                {incoming.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                    {incoming.map(s => (
+                      <Badge key={s.id} color={T.info}>
+                        +{s.quantity} {product.unit} — {s.expected_date ? new Date(s.expected_date).toLocaleDateString("fr-FR") : "à venir"}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Quantity input */}
+              {!empty && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setQty(product.id, Math.max(0, qty - 1))}
+                    style={{
+                      width: 34, height: 34, borderRadius: 8, border: `1px solid ${T.border}`,
+                      background: T.surfaceHi, color: T.text, fontSize: 18, cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                  >−</button>
+                  <input
+                    type="number" min="0"
+                    value={cart[product.id] || ""}
+                    placeholder="0"
+                    onChange={e => setQty(product.id, e.target.value)}
+                    style={{
+                      width: 60, textAlign: "center",
+                      background: hasQty ? T.accent + "22" : T.surfaceHi,
+                      border: `1.5px solid ${hasQty ? T.accent : T.border}`,
+                      borderRadius: 9, padding: "8px 6px",
+                      color: hasQty ? T.accent : T.text,
+                      fontSize: 15, fontWeight: hasQty ? 700 : 400,
+                      outline: "none",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setQty(product.id, qty + 1)}
+                    style={{
+                      width: 34, height: 34, borderRadius: 8, border: `1px solid ${T.border}`,
+                      background: T.surfaceHi, color: T.text, fontSize: 18, cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                  >+</button>
+                </div>
+              )}
             </div>
           </div>
-        </Card>
-      ))}
+        );
+      })}
 
-      <div style={{ position:"sticky", bottom:90, marginTop:14 }}>
-        <Btn disabled={!hasCart || placing} onClick={submit} style={{ width:"100%" }}>
-          {placing ? "Envoi..." : placed ? "✓ Commande envoyée" : "Commander"}
+      {/* Cart summary + order button — sticky above bottom bar */}
+      <div style={{ position: "sticky", bottom: 80, marginTop: 16 }}>
+        {hasCart && (
+          <div style={{
+            background: T.accent + "22", border: `1px solid ${T.accent}44`,
+            borderRadius: 12, padding: "10px 14px", marginBottom: 8,
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+          }}>
+            <div style={{ fontSize: 13, color: T.accent, fontWeight: 600 }}>
+              {cartTotal} unités sélectionnées
+            </div>
+            <div style={{ fontSize: 12, color: T.textSub }}>
+              {Object.keys(cart).filter(k => Number(cart[k]) > 0).length} produit(s)
+            </div>
+          </div>
+        )}
+        <Btn
+          disabled={!hasCart || placing}
+          onClick={submit}
+          size="lg"
+          style={{ width: "100%", boxShadow: hasCart ? `0 4px 16px ${T.accent}44` : "none" }}
+        >
+          {placing ? "Envoi en cours..." : placed ? "✓ Commande envoyée !" : "Passer la commande →"}
         </Btn>
       </div>
     </div>
