@@ -2,6 +2,9 @@ import { useTheme } from "../../core/theme";
 
 export function BottomBar({ tabs, active, onChange }) {
   const T = useTheme();
+  // Up to 5 tabs fill the bar; more than that scroll horizontally so nothing
+  // is hidden (previously tabs beyond the 5th were silently dropped).
+  const many = tabs.length > 5;
 
   return (
     <div style={{
@@ -10,20 +13,24 @@ export function BottomBar({ tabs, active, onChange }) {
       background: T.surface,
       borderTop: `1px solid ${T.border}`,
       display: "flex",
+      flexWrap: "nowrap",
+      overflowX: many ? "auto" : "visible",
+      WebkitOverflowScrolling: "touch",
       zIndex: 200,
       paddingBottom: "env(safe-area-inset-bottom, 0px)",
       boxShadow: T.mode === "light"
         ? "0 -4px 16px rgba(0,0,0,0.08)"
         : "0 -4px 16px rgba(0,0,0,0.4)",
     }}>
-      {tabs.slice(0, 5).map(t => {
+      {tabs.map(t => {
         const on = active === t.id;
         return (
           <button
             key={t.id}
             onClick={() => onChange(t.id)}
             style={{
-              flex: 1, padding: "10px 4px 10px", background: "none", border: "none",
+              flex: many ? "0 0 20%" : 1,
+              padding: "10px 4px 10px", background: "none", border: "none",
               cursor: "pointer", display: "flex", flexDirection: "column",
               alignItems: "center", gap: 3, position: "relative",
               minHeight: 60,

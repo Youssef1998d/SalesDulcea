@@ -129,7 +129,7 @@ export function AgentApp({ user, agent, onSignOut, onThemeToggle, themeMode }) {
     ...(canOrder ? [
       { id: "stock",  icon: "📦", label: "Stock",     badge: 0 },
     ] : []),
-    ...(canOrder && !canManage ? [
+    ...(canOrder ? [
       { id: "orders", icon: "🧾", label: "Commandes", badge: 0 },
     ] : []),
     ...(canManage ? [

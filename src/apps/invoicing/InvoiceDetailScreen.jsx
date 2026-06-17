@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTheme } from "../../core/theme";
 import { Btn, Badge, Modal, Input } from "../../components/ui";
+import { QrImage } from "../../components/QrImage";
 import { INVOICE_STATUS, ENTITY_TYPES, fmtMoneyDT, fmtDateFr } from "../../core/invoiceConstants";
 
 // Full invoice details page (overlay). Shows preview + agent/manager actions.
@@ -121,6 +122,26 @@ export function InvoiceDetailScreen({ invoice, org, role, onClose, onRecordPayme
             </div>
           )}
         </div>
+
+        {/* Associated purchase orders */}
+        {(invoice.purchase_orders || []).length > 0 && (
+          <div style={{
+            background: T.surface, border: `1px solid ${T.border}`,
+            borderRadius: 14, padding: "14px 18px", marginBottom: 16, boxShadow: T.shadow,
+          }}>
+            <div style={{ fontSize: 11, color: T.textSub, fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
+              Bons de commande associés · {invoice.purchase_orders.length}
+            </div>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+              {invoice.purchase_orders.map((po, i) => (
+                <div key={po.id || i} style={{ textAlign: "center" }}>
+                  <QrImage value={po.qr_token} size={96} />
+                  <div style={{ fontSize: 11, color: T.text, fontWeight: 600, marginTop: 4 }}>{po.po_number}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>

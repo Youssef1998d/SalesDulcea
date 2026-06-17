@@ -2,12 +2,13 @@ import { useState } from "react";
 import { useTheme } from "../../../core/theme";
 import { Badge, Btn, SectionTitle, EmptyState, SkeletonList } from "../../../components/ui";
 import { OrderTimeline } from "../../../components/OrderTimeline";
+import { QrImage } from "../../../components/QrImage";
 import { TrackingScanner } from "../../tracking/TrackingScanner";
 import { ORDER_STATUS } from "../../../core/orderConstants";
 
 const CANCELLABLE = ["pending", "confirmed", "shipped"];
 
-export function OrdersTab({ orders, loading, org, onGeneratePo, onCancelOrder, onResolveQr }) {
+export function OrdersTab({ orders, loading, org, title = "Mes commandes", onGeneratePo, onCancelOrder, onResolveQr }) {
   const T = useTheme();
   const [expanded, setExpanded] = useState(null);
   const [scanOpen, setScanOpen] = useState(false);
@@ -26,7 +27,7 @@ export function OrdersTab({ orders, loading, org, onGeneratePo, onCancelOrder, o
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <SectionTitle>Mes commandes · {orders.length}</SectionTitle>
+        <SectionTitle>{title} · {orders.length}</SectionTitle>
         {onResolveQr && (
           <Btn size="sm" variant="subtle" onClick={() => setScanOpen(true)}>📷 Scanner</Btn>
         )}
@@ -76,7 +77,21 @@ export function OrdersTab({ orders, loading, org, onGeneratePo, onCancelOrder, o
             {/* Expanded: timeline + actions */}
             {isOpen && (
               <div style={{ marginTop: 14, borderTop: `1px solid ${T.border}`, paddingTop: 14 }}>
-                <OrderTimeline order={o} invoice={o.invoice} />
+                <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 180 }}>
+                    <OrderTimeline order={o} invoice={o.invoice} />
+                  </div>
+                  {/* On-screen QR — scan from another device or print via the PDF */}
+                  <div style={{ textAlign: "center" }}>
+                    <QrImage value={o.qr_token} size={120} />
+                    <div style={{ fontSize: 10, color: T.textDim, marginTop: 4 }}>Suivi de la commande</div>
+                  </div>
+                </div>
+                {o.invoice?.invoice_number && (
+                  <div style={{ fontSize: 12, color: T.textSub, marginTop: 10 }}>
+                    Facture : <span style={{ color: T.gold, fontWeight: 700 }}>{o.invoice.invoice_number}</span>
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
                   <Btn size="sm" onClick={() => openPo(o)} disabled={busy === o.id}>
                     {busy === o.id ? "..." : o.po_pdf_url ? "📄 Bon de commande" : "📄 Générer le bon de commande"}

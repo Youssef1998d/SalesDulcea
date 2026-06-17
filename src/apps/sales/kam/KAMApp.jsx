@@ -7,6 +7,7 @@ import { ProductsTab } from "./ProductsTab";
 import { OverviewTab } from "./OverviewTab";
 import { SalesTab }    from "./SalesTab";
 import { InvoicingTab, CompanySettings } from "../../invoicing";
+import { OrdersTab } from "../../stock";
 import { useOrders } from "../../../hooks/useOrders";
 
 export function KAMApp({ user, onSignOut, agent, onThemeToggle, themeMode }) {
@@ -21,7 +22,7 @@ export function KAMApp({ user, onSignOut, agent, onThemeToggle, themeMode }) {
   const [org,           setOrg]     = useState(agent?.organizations || null);
   const [settingsOpen,  setSettingsOpen] = useState(false);
 
-  const { orders: orgOrders, load: loadOrders } = useOrders({ orgId: agent?.org_id });
+  const { orders: orgOrders, load: loadOrders, generatePoDocument, findByQrToken, cancelOrder } = useOrders({ orgId: agent?.org_id });
   useEffect(() => { if (agent?.org_id) loadOrders(); }, [agent, loadOrders]);
 
   const loadAll = useCallback(async () => {
@@ -82,6 +83,7 @@ export function KAMApp({ user, onSignOut, agent, onThemeToggle, themeMode }) {
     { id: "overview",  icon: "📊", label: "Overview", badge: 0 },
     { id: "agents",    icon: "👥", label: "Équipe",   badge: pending.length },
     { id: "products",  icon: "📦", label: "Produits", badge: 0 },
+    { id: "orders",    icon: "📑", label: "Commandes", badge: 0 },
     { id: "sales",     icon: "💰", label: "Ventes",   badge: 0 },
     { id: "invoices",  icon: "🧾", label: "Factures", badge: 0 },
   ];
@@ -137,6 +139,17 @@ export function KAMApp({ user, onSignOut, agent, onThemeToggle, themeMode }) {
           products={products}
           agents={agents}
           onRefresh={loadAll}
+        />
+      )}
+      {!loading && tab === "orders" && (
+        <OrdersTab
+          orders={orgOrders}
+          loading={false}
+          org={org}
+          title="Toutes les commandes"
+          onGeneratePo={generatePoDocument}
+          onResolveQr={findByQrToken}
+          onCancelOrder={cancelOrder}
         />
       )}
       {!loading && tab === "invoices" && (
