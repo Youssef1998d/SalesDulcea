@@ -83,12 +83,12 @@ export function LogTab({ form, setForm, products, onSubmit, saving, saved, visit
                 boxShadow: T.shadow,
               }}>
                 {/* Product select + remove */}
-                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, minWidth: 0 }}>
                   <select
                     value={line.productId}
                     onChange={e => updLine(line.id, "productId", e.target.value)}
                     style={{
-                      flex: 1, background: T.surfaceHi,
+                      flex: 1, minWidth: 0, background: T.surfaceHi,
                       border: `1px solid ${T.border}`, borderRadius: 9,
                       padding: "9px 11px", color: T.text, fontSize: 13, outline: "none",
                     }}
@@ -110,17 +110,17 @@ export function LogTab({ form, setForm, products, onSubmit, saving, saved, visit
                   )}
                 </div>
 
-                {/* Quantities */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                {/* Quantities — two inputs side by side */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {[["Boxes", "boxes"], ["Pots offerts 🎁", "freePots"]].map(([lbl, key]) => (
-                    <div key={key}>
+                    <div key={key} style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 10, color: T.textDim, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>{lbl}</div>
                       <input
                         type="number" min="0"
                         value={line[key]}
                         onChange={e => updLine(line.id, key, e.target.value)}
                         style={{
-                          width: "100%", background: T.surfaceHi,
+                          width: "100%", minWidth: 0, background: T.surfaceHi,
                           border: `1px solid ${T.border}`, borderRadius: 8,
                           padding: "9px 10px", color: T.text, fontSize: 15,
                           fontWeight: 600, outline: "none", textAlign: "center",
@@ -130,16 +130,18 @@ export function LogTab({ form, setForm, products, onSubmit, saving, saved, visit
                       />
                     </div>
                   ))}
-                  <div>
-                    <div style={{ fontSize: 10, color: T.textDim, marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>Valeur</div>
-                    <div style={{
-                      padding: "9px 0",
-                      fontFamily: "'Bebas Neue', sans-serif",
-                      fontSize: 18, color: lineVal > 0 ? T.gold : T.textDim,
-                    }}>
-                      {lineVal > 0 ? `${fmt(lineVal)} DT` : "—"}
-                    </div>
-                  </div>
+                </div>
+
+                {/* Line value — its own row so a long amount can't overflow */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 12, gap: 10 }}>
+                  <span style={{ fontSize: 10, color: T.textDim, textTransform: "uppercase", letterSpacing: 0.5 }}>Valeur</span>
+                  <span style={{
+                    fontFamily: "'Bebas Neue', sans-serif", fontSize: 20,
+                    color: lineVal > 0 ? T.gold : T.textDim,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>
+                    {lineVal > 0 ? `${fmt(lineVal)} DT` : "—"}
+                  </span>
                 </div>
               </div>
             );
