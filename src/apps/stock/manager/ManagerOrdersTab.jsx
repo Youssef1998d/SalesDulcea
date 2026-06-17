@@ -53,8 +53,9 @@ export function ManagerOrdersTab({ orders, stock, loading, onConfirm, onReject, 
         }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 15, color: T.text }}>{o.agents?.full_name}</div>
+              <div style={{ fontWeight: 700, fontSize: 15, color: T.text }}>{o.clients?.name || "Client —"}</div>
               <div style={{ fontSize: 12, color: T.textDim, marginTop: 2 }}>
+                {o.agents?.full_name ? `${o.agents.full_name} · ` : ""}
                 {new Date(o.created_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
               </div>
             </div>
@@ -137,8 +138,8 @@ export function ManagerOrdersTab({ orders, stock, loading, onConfirm, onReject, 
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{o.agents?.full_name}</div>
-                  <div style={{ fontSize: 12, color: T.textDim }}>{new Date(o.created_at).toLocaleDateString("fr-FR")}</div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: T.text }}>{o.clients?.name || "Client —"}</div>
+                  <div style={{ fontSize: 12, color: T.textDim }}>{o.agents?.full_name ? `${o.agents.full_name} · ` : ""}{new Date(o.created_at).toLocaleDateString("fr-FR")}</div>
                 </div>
                 <Badge color={T.info}>Confirmée</Badge>
               </div>
@@ -168,8 +169,8 @@ export function ManagerOrdersTab({ orders, stock, loading, onConfirm, onReject, 
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: T.text }}>{o.agents?.full_name}</div>
-                  <div style={{ fontSize: 11, color: T.textDim }}>{new Date(o.created_at).toLocaleDateString("fr-FR")}</div>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: T.text }}>{o.clients?.name || "Client —"}</div>
+                  <div style={{ fontSize: 11, color: T.textDim }}>{o.agents?.full_name ? `${o.agents.full_name} · ` : ""}{new Date(o.created_at).toLocaleDateString("fr-FR")}</div>
                 </div>
                 <Badge color={T[STATUS_COLOR[o.status]]}>{STATUS_LABEL[o.status] || o.status}</Badge>
               </div>

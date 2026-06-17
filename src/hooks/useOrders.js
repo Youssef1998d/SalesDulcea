@@ -11,7 +11,7 @@ export function useOrders({ agentId = null, orgId = null } = {}) {
     setLoading(true);
     let q = supabase
       .from("orders")
-      .select("*, order_lines(*, products(*), stock(*)), agents!orders_agent_id_fkey(full_name)")
+      .select("*, order_lines(*, products(*), stock(*)), agents!orders_agent_id_fkey(full_name), clients(name, phone, address)")
       .eq("org_id", orgId)
       .order("created_at", { ascending: false });
     if (agentId) q = q.eq("agent_id", agentId);
@@ -20,10 +20,12 @@ export function useOrders({ agentId = null, orgId = null } = {}) {
     setLoading(false);
   }, [agentId, orgId]);
 
-  async function placeOrder(lines) {
+  // Place an order for a specific client. Returns the created order so the
+  // caller can immediately generate its invoice (an order always carries a facture).
+  async function placeOrder(clientId, lines) {
     const { data: order, error } = await supabase
       .from("orders")
-      .insert([{ agent_id: agentId, org_id: orgId, status: "pending" }])
+      .insert([{ agent_id: agentId, org_id: orgId, client_id: clientId || null, status: "pending" }])
       .select()
       .single();
     if (error) throw error;
@@ -33,7 +35,16 @@ export function useOrders({ agentId = null, orgId = null } = {}) {
       quantity_requested: Number(l.quantity),
       unit: l.unit || null,
     }));
-    await supabase.from("order_lines").insert(rows);
+    const { error: lineErr } = await supabase.from("order_lines").insert(rows);
+    if (lineErr) throw lineErr;
+    await load();
+    return order;
+  }
+
+  // Roll back an order (used if invoice generation fails after the order was created).
+  async function deleteOrder(orderId) {
+    await supabase.from("order_lines").delete().eq("order_id", orderId);
+    await supabase.from("orders").delete().eq("id", orderId);
     await load();
   }
 
@@ -69,5 +80,5 @@ export function useOrders({ agentId = null, orgId = null } = {}) {
     await load();
   }
 
-  return { orders, loading, load, placeOrder, confirmOrder, rejectOrder, markDelivered };
+  return { orders, loading, load, placeOrder, deleteOrder, confirmOrder, rejectOrder, markDelivered };
 }

@@ -8,11 +8,13 @@ import { InvoiceDetailScreen } from "./InvoiceDetailScreen";
 
 // Invoicing hub. Used as the "Factures" tab by both agent and manager apps.
 //   role     : 'agent' | 'kam' | 'superadmin'
-//   orders   : agent's own orders (used to surface delivered orders to invoice)
-//   pendingOrder : an order routed in from elsewhere to auto-open generation
+//   orders   : agent's own orders — every facture is tied to an order
+//   pendingOrder        : an order routed in to auto-open generation (recovery)
+//   pendingDetailInvoice: a freshly created invoice to open directly (after ordering)
 export function InvoicingTab({
   role, orgId, agentId, org, clients = [], products = [],
-  orders = [], pendingOrder = null, onConsumePending, onOpenSettings,
+  orders = [], pendingOrder = null, onConsumePending,
+  pendingDetailInvoice = null, onConsumeDetail, onOpenSettings,
 }) {
   const T = useTheme();
   const isAgent = role === "agent";
@@ -26,7 +28,7 @@ export function InvoicingTab({
 
   useEffect(() => { load(); }, [load]);
 
-  // Auto-open generation when routed in from the Orders tab
+  // Auto-open generation when routed in from the Orders tab (recovery path)
   useEffect(() => {
     if (pendingOrder) {
       setGenOrder(pendingOrder);
@@ -35,11 +37,21 @@ export function InvoicingTab({
     }
   }, [pendingOrder]);
 
+  // Open a just-created invoice's preview directly (after placing an order)
+  useEffect(() => {
+    if (pendingDetailInvoice) {
+      setDetail(pendingDetailInvoice);
+      load();
+      onConsumeDetail?.();
+    }
+  }, [pendingDetailInvoice]);
+
   const invoicedOrderIds = new Set(
     invoices.filter(i => i.order_id && i.status !== "cancelled").map(i => i.order_id)
   );
-  const deliveredToInvoice = isAgent
-    ? orders.filter(o => o.status === "delivered" && !invoicedOrderIds.has(o.id))
+  // Orders with no active facture yet (legacy orders, or a failed auto-generation)
+  const ordersToInvoice = isAgent
+    ? orders.filter(o => o.status !== "rejected" && !invoicedOrderIds.has(o.id))
     : [];
 
   async function handleGenerate(payload) {
@@ -47,19 +59,13 @@ export function InvoicingTab({
     setDetail(created);
   }
 
-  function openGenerate(order = null) {
+  function openGenerate(order) {
     setGenOrder(order);
     setGenOpen(true);
   }
 
   return (
     <div>
-      {isAgent && (
-        <Btn style={{ width: "100%", marginBottom: 16 }} onClick={() => openGenerate(null)}>
-          + Générer une facture
-        </Btn>
-      )}
-
       {!isAgent && onOpenSettings && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
           <Btn variant="subtle" size="sm" onClick={onOpenSettings}>⚙ Paramètres société</Btn>
@@ -75,20 +81,21 @@ export function InvoicingTab({
         </div>
       )}
 
-      {/* Delivered orders awaiting invoicing (agent) */}
-      {deliveredToInvoice.length > 0 && (
+      {/* Orders still without a facture (recovery for legacy/failed orders) */}
+      {ordersToInvoice.length > 0 && (
         <>
-          <SectionTitle>Commandes livrées à facturer · {deliveredToInvoice.length}</SectionTitle>
-          {deliveredToInvoice.map(o => (
+          <SectionTitle>Commandes sans facture · {ordersToInvoice.length}</SectionTitle>
+          {ordersToInvoice.map(o => (
             <div key={o.id} style={{
               background: T.surface, border: `1px solid ${T.border}`,
-              borderLeft: `3px solid ${T.success}`,
+              borderLeft: `3px solid ${T.warning}`,
               borderRadius: 14, padding: "13px 15px", marginBottom: 9, boxShadow: T.shadow,
               display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,
             }}>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: T.text }}>
                   Commande du {new Date(o.created_at).toLocaleDateString("fr-FR")}
+                  {o.clients?.name ? ` · ${o.clients.name}` : ""}
                 </div>
                 <div style={{ fontSize: 12, color: T.textDim }}>
                   {(o.order_lines || []).length} produit(s)
@@ -106,7 +113,7 @@ export function InvoicingTab({
       {loading && <SkeletonList count={3} height={76} />}
       {!loading && invoices.length === 0 && (
         <EmptyState icon="🧾" title="Aucune facture"
-          sub={isAgent ? "Générez votre première facture depuis une vente ou une commande livrée" : "Les factures créées par les agents apparaîtront ici"} />
+          sub={isAgent ? "Passez une commande depuis l'onglet Stock — sa facture sera générée automatiquement" : "Les factures créées par les agents apparaîtront ici"} />
       )}
 
       {invoices.map(inv => {

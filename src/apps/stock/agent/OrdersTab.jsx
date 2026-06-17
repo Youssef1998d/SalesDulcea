@@ -1,5 +1,5 @@
 import { useTheme } from "../../../core/theme";
-import { Badge, Btn, SectionTitle, EmptyState, SkeletonList } from "../../../components/ui";
+import { Badge, SectionTitle, EmptyState, SkeletonList } from "../../../components/ui";
 
 const STATUS_CONFIG = {
   pending:   { color: "warning", label: "En attente",  icon: "⏳" },
@@ -8,7 +8,7 @@ const STATUS_CONFIG = {
   rejected:  { color: "danger",  label: "Refusée",     icon: "✕" },
 };
 
-export function OrdersTab({ orders, loading, onGenerateInvoice }) {
+export function OrdersTab({ orders, loading }) {
   const T = useTheme();
 
   if (loading) return <SkeletonList count={3} height={90} />;
@@ -33,9 +33,15 @@ export function OrdersTab({ orders, loading, onGenerateInvoice }) {
             borderRadius: 14, padding: "14px 16px", marginBottom: 10,
             boxShadow: T.shadow,
           }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <div style={{ fontSize: 12, color: T.textDim }}>
-                {new Date(o.created_at).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>
+                  {o.clients?.name || "Client —"}
+                </div>
+                <div style={{ fontSize: 12, color: T.textDim, marginTop: 2 }}>
+                  {new Date(o.created_at).toLocaleString("fr-FR", { dateStyle: "medium", timeStyle: "short" })}
+                  {o.agents?.full_name ? ` · ${o.agents.full_name}` : ""}
+                </div>
               </div>
               <Badge color={T[cfg.color]}>{cfg.icon} {cfg.label}</Badge>
             </div>
@@ -67,10 +73,7 @@ export function OrdersTab({ orders, loading, onGenerateInvoice }) {
             </div>
 
             {/* Total quantity */}
-            <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              {o.status === "delivered" && onGenerateInvoice ? (
-                <Btn size="sm" onClick={() => onGenerateInvoice(o)}>🧾 Générer une facture</Btn>
-              ) : <span />}
+            <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end", alignItems: "center" }}>
               <div style={{ fontSize: 12, color: T.textDim }}>
                 Total: <span style={{ color: T.text, fontWeight: 600 }}>
                   {(o.order_lines || []).reduce((s, l) => s + Number(l.quantity_confirmed ?? l.quantity_requested), 0)} unités

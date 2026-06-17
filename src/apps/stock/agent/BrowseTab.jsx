@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useTheme } from "../../../core/theme";
-import { Btn, Badge, SectionTitle, EmptyState, SkeletonList } from "../../../components/ui";
+import { Btn, Badge, SectionTitle, EmptyState, SkeletonList, SelectField } from "../../../components/ui";
 
-export function BrowseTab({ stock, loading, onPlaceOrder }) {
+export function BrowseTab({ stock, loading, clients = [], onPlaceOrder }) {
   const T       = useTheme();
-  const [cart,    setCart]    = useState({});
-  const [placing, setPlacing] = useState(false);
-  const [placed,  setPlaced]  = useState(false);
+  const [cart,     setCart]     = useState({});
+  const [clientId, setClientId] = useState("");
+  const [placing,  setPlacing]  = useState(false);
+  const [placed,   setPlaced]   = useState(false);
+  const [error,    setError]    = useState(null);
 
   // Group by product
   const byProduct = {};
@@ -24,6 +26,7 @@ export function BrowseTab({ stock, loading, onPlaceOrder }) {
   }
 
   async function submit() {
+    setError(null);
     const lines = Object.entries(cart)
       .filter(([, q]) => Number(q) > 0)
       .map(([productId, q]) => ({
@@ -32,12 +35,17 @@ export function BrowseTab({ stock, loading, onPlaceOrder }) {
         unit: byProduct[productId]?.product.unit,
       }));
     if (!lines.length) return;
+    if (!clientId) { setError("Veuillez sélectionner un client pour la commande."); return; }
     setPlacing(true);
     try {
-      await onPlaceOrder(lines);
+      // Placing the order also generates its facture (an order always carries one).
+      await onPlaceOrder({ clientId, lines });
       setCart({});
+      setClientId("");
       setPlaced(true);
       setTimeout(() => setPlaced(false), 2500);
+    } catch (e) {
+      setError(e.message || "Échec de la commande.");
     } finally { setPlacing(false); }
   }
 
@@ -131,7 +139,7 @@ export function BrowseTab({ stock, loading, onPlaceOrder }) {
         );
       })}
 
-      {/* Cart summary + order button — sticky above bottom bar */}
+      {/* Cart summary + client + order button — sticky above bottom bar */}
       <div style={{ position: "sticky", bottom: 80, marginTop: 16 }}>
         {hasCart && (
           <div style={{
@@ -147,13 +155,47 @@ export function BrowseTab({ stock, loading, onPlaceOrder }) {
             </div>
           </div>
         )}
+
+        {/* Client is required — the order generates a facture for this client */}
+        {hasCart && (
+          clients.length === 0 ? (
+            <div style={{
+              background: T.surfaceHi, border: `1px dashed ${T.border}`,
+              borderRadius: 12, padding: "12px 14px", marginBottom: 8,
+              fontSize: 13, color: T.textDim, textAlign: "center",
+            }}>
+              Ajoutez d'abord un client (onglet Clients) pour pouvoir commander.
+            </div>
+          ) : (
+            <div style={{
+              background: T.surface, border: `1px solid ${clientId ? T.accent : T.border}`,
+              borderRadius: 12, padding: "4px 14px 0", marginBottom: 8,
+            }}>
+              <SelectField label="Client (facture) *" value={clientId} onChange={setClientId}>
+                <option value="">Sélectionner un client...</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </SelectField>
+            </div>
+          )
+        )}
+
+        {error && (
+          <div style={{
+            background: T.mode === "dark" ? "#1f0a0a" : "#fff5f5",
+            border: `1px solid ${T.danger}44`, color: T.danger,
+            borderRadius: 10, padding: "10px 14px", fontSize: 13, marginBottom: 8,
+          }}>
+            {error}
+          </div>
+        )}
+
         <Btn
-          disabled={!hasCart || placing}
+          disabled={!hasCart || placing || (hasCart && clients.length === 0)}
           onClick={submit}
           size="lg"
           style={{ width: "100%", boxShadow: hasCart ? `0 4px 16px ${T.accent}44` : "none" }}
         >
-          {placing ? "Envoi en cours..." : placed ? "✓ Commande envoyée !" : "Passer la commande →"}
+          {placing ? "Commande + facture..." : placed ? "✓ Commande & facture créées !" : "Commander & facturer →"}
         </Btn>
       </div>
     </div>

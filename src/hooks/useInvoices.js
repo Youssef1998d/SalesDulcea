@@ -44,8 +44,6 @@ export function useInvoices({ orgId = null, agentId = null } = {}) {
     if (!client)                                     throw new Error("Aucun client sélectionné.");
     if (!lines || lines.length === 0)                throw new Error("Aucun produit sur la facture.");
     if (!org?.stamp_url)                             throw new Error(STAMP_MISSING_MSG);
-    if (orderId && order && order.status !== "delivered")
-      throw new Error("La commande n'a pas été livrée.");
 
     // Prevent duplicate invoice for the same order
     if (orderId) {

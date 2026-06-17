@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useTheme } from "../../core/theme";
 import { Modal, Btn, Input, SelectField } from "../../components/ui";
 import { supabase } from "../../core/supabase";
@@ -18,6 +18,13 @@ export function GenerateInvoiceModal({ open, onClose, clients, products, org, or
   const [error, setError] = useState(null);
 
   const client = clients.find(c => c.id === clientId) || null;
+
+  // When generating from an order, preselect the order's client.
+  useEffect(() => {
+    if (order?.client_id && clients.some(c => c.id === order.client_id)) {
+      pickClient(order.client_id);
+    }
+  }, [order, clients]); // eslint-disable-line
 
   // Lines: from order (locked) or manual (direct sale)
   const orderLines = useMemo(() => {
